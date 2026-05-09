@@ -6,7 +6,7 @@
 
 Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon), May 9–10 2026, at Antler ATX. Submitting to the Brainforge / Vicinity Texas Open Data Track and the Agents Track.
 
-> See [`PROPOSAL.md`](../PROPOSAL.md) in the parent directory for the full project thesis: pitch, demo lineup, architecture, scope, attribution, and what NOT to spend time on.
+> See [`PROPOSAL.md`](./PROPOSAL.md) for the full project thesis: pitch, demo lineup, architecture, scope, attribution, and what NOT to spend time on.
 
 ## What Dryline does
 

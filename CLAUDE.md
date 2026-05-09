@@ -1,6 +1,6 @@
 # Dryline — Claude Code agent brief
 
-You are working on **Dryline**, a Texas water environmental-intelligence tool built for the AITX × Codex Hackathon (May 9–10, 2026). This file is your project briefing. Read [`PROPOSAL.md`](../PROPOSAL.md) before any non-trivial change — it's the source of truth for scope, demo flow, and what to avoid.
+You are working on **Dryline**, a Texas water environmental-intelligence tool built for the AITX × Codex Hackathon (May 9–10, 2026). This file is your project briefing. Read [`PROPOSAL.md`](./PROPOSAL.md) before any non-trivial change — it's the source of truth for scope, demo flow, and what to avoid.
 
 ## Your beat in this repo
 

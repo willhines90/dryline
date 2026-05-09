@@ -1,17 +1,13 @@
-# Dryline — Claude Code agent brief
+# Dryline — agent brief
 
 You are working on **Dryline**, a Texas water environmental-intelligence tool built for the AITX × Codex Hackathon (May 9–10, 2026). This file is your project briefing. Read [`PROPOSAL.md`](./PROPOSAL.md) before any non-trivial change — it's the source of truth for scope, demo flow, and what to avoid.
 
-## Your beat in this repo
+## Repo layout
 
-Claude Code owns **`/mcp`** and **`/skill`**. Specifically:
-
-- The MCP server: 8 bounded tools, all returning `{ data, caveats[], sources[] }`
-- DuckDB snapshot loader for groundwater wells, parcels, floodplain
-- The agent skill (`/skill/SKILL.md`) that teaches *any* agent (Codex, Claude, custom OpenAI loop) how to use the MCP responsibly
-- Worked examples and reference docs in `/skill/references/`
-
-Codex owns `/web`. Don't edit it without coordinating — your job is to make the MCP contract great so the web app can render it cleanly.
+- `mcp/` — the MCP server: 8 bounded tools, all returning `{ data, caveats[], sources[] }`. DuckDB snapshot loader for groundwater wells, parcels, floodplain.
+- `skill/` — agent skill (`/skill/SKILL.md`) that teaches *any* agent how to use the MCP responsibly. Worked examples and reference docs in `skill/references/`.
+- `web/` — Next.js + MapLibre + shadcn/ui investigation surface: visible reasoning trace, cinematic demo sequence (address entry → map fly-to → trace streams → cards populate → tension flagged → synthesis → drafted artifact), mode toggle (Personal ↔ Transparency), Actions panel (drafted artifacts; hero is the public-comment draft).
+- `fixtures/` — canonical demo inputs. The live-demo trio (Wimberley → Taylor/Samsung → Fort Stockton/Comanche Springs) must run cleanly in three minutes; see `fixtures/demo-addresses.json` for the full seven.
 
 ## The non-negotiable contract
 
@@ -19,7 +15,7 @@ Every MCP tool returns:
 
 ```ts
 type ToolResult<T> = {
-  data: T;
+  data: T | null;
   caveats: Caveat[];   // freshness, confidence, what the data does NOT say
   sources: Source[];   // {title, url, retrievedAt}
 };
@@ -32,9 +28,11 @@ type ToolResult<T> = {
 - What the data does NOT say (e.g., "presence of permit ≠ environmental harm")
 - Confidence (e.g., "address resolution succeeded with 95% match")
 
-`sources` is *every* upstream URL with a `retrievedAt` timestamp. The web app surfaces these. No claim without a source.
+`sources` is *every* upstream URL with a `retrievedAt` timestamp. The web app surfaces these. **No claim without a source.**
 
-## The eight tools (priority order)
+The wire types live in `mcp/src/types.ts`. The web app mirrors them by hand at `web/lib/types.ts` (clean runtime boundary; web does not import from `@dryline/mcp`). When `mcp/src/types.ts` changes, `web/lib/types.ts` must change in lockstep — typecheck-in-isolation will not catch drift.
+
+## The eight MCP tools (priority order)
 
 1. **`resolve_location(address)`** — lat/lng + county + watershed (HUC-12) + GCD + PWS ID. Foundation for everything else.
 2. **`get_drought_status(address)`** — U.S. Drought Monitor REST API.
@@ -45,9 +43,9 @@ type ToolResult<T> = {
 7. **`get_active_permits(address, radius_mi, since)`** — TCEQ permit data, ECHO proxy where available.
 8. **`get_river_flow(address)`** — USGS NWIS REST API.
 
-Tools 1–5 are the **minimum viable winning version** (see PROPOSAL.md fallback section). Build them first, end-to-end, with real source URLs and live API calls where the data is live. Tools 6–8 ship if time allows.
+Tools 1–5 are the **minimum viable winning version** (see PROPOSAL.md fallback section). Build them first, end-to-end, with real source URLs and live API calls. Tools 6–8 ship if time allows.
 
-## Conventions
+## MCP conventions
 
 - **TypeScript ESM everywhere.** Strict mode (`tsconfig.base.json`).
 - **MCP TS SDK** (`@modelcontextprotocol/sdk`) — current API uses `Server` from `sdk/server/index.js` and `StdioServerTransport`.
@@ -55,6 +53,17 @@ Tools 1–5 are the **minimum viable winning version** (see PROPOSAL.md fallback
 - **No throwing across the tool boundary.** If a fetch fails, return `{ data: null, caveats: [{ severity: 'error', message }], sources: [] }`. The agent must be able to reason about partial failure.
 - **Cite source URL with retrievedAt timestamp on every result.** No exceptions.
 - **DuckDB for snapshots only.** Live APIs don't pass through DuckDB.
+
+## Web conventions
+
+- **Imports:** `@dryline/mcp` and `@dryline/web` are the workspace package names.
+- **Styling:** Tailwind + shadcn/ui. Aesthetic is topographic, not civic-tech blue. Reservoir blues against arid earth tones. See PROPOSAL.md → "Aesthetic direction."
+- **Map library:** MapLibre GL (not Mapbox — token-free).
+- **No localStorage in artifacts.** Use React state only.
+- **No user accounts.** Subscribe button stores email; no auth.
+- **No chat box.** The "Investigate" button + reasoning trace IS the interaction.
+- **Mode toggle exists** but Personal mode is v1; Transparency mode is the stretch.
+- **Surface caveats and sources in the UI.** No claim without a source. No "black box" answers. This is judged.
 
 ## Skill discipline (`/skill/SKILL.md`)
 
@@ -75,21 +84,32 @@ Resist scope creep on examples — three is enough.
 - Action drafts include a "review before sending" notice.
 - The skill explicitly forbids the agent from causation language and personal-impact predictions.
 
+## What NOT to spend time on (from PROPOSAL.md)
+
+- Don't perfect GIS layer styling — reservoir blue is enough.
+- Don't integrate every dataset — eight tools is the ceiling.
+- Don't build a chat interface.
+- Don't build a settings page.
+- Don't gold-plate typography — default shadcn is fine.
+- Don't over-engineer deploy infra — Vercel + a single MCP host.
+
+## Voice of the product
+
+Quietly intelligent. Spare. Concrete. Cites everything. Never dramatizes risk. The agent reads like a careful field researcher, not a chatbot. UI copy follows the same rule.
+
+## When you finish a feature, ask yourself
+
+1. Does the user see citations and caveats? If no, add them.
+2. Does the cinematic sequence still flow without stalls? If no, fix it before adding scope.
+3. If you touched `mcp/src/types.ts`, did `web/lib/types.ts` move in lockstep?
+
 ## Useful commands
 
 ```bash
 pnpm install
-pnpm --filter @dryline/mcp dev          # run MCP server
+pnpm dev:web                            # http://localhost:3000
+pnpm dev:mcp                            # MCP server on stdio (or HTTP per .env)
+pnpm typecheck                          # whole monorepo
 pnpm --filter @dryline/mcp typecheck
 pnpm --filter @dryline/mcp build
 ```
-
-## Where to start
-
-1. Verify the package builds and the server entry point speaks MCP.
-2. Implement `resolve_location` end-to-end (Nominatim for geocoding; Census FIPS lookup; HUC-12 from a USGS dataset).
-3. Implement `get_drought_status` against `usdmdataservices.unl.edu`.
-4. Write the matching skill examples.
-5. Then march through tools 3–5.
-
-If you find yourself building tool 6+ before the skill has worked examples for tools 1–5, stop — the demo doesn't need it.

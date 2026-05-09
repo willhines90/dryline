@@ -29,6 +29,8 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
     "Resolve a Texas address to lat/lng and enrich with county FIPS, watershed (HUC-12), groundwater conservation district, and public water system ID. Foundation for all other tools.",
   inputSchema,
   run: async ({ address }) => {
+    // Build sources as we go so partial-failure paths still cite what worked.
+    const sources: ReturnType<typeof source>[] = [];
     try {
       // 1. Nominatim geocoding (one-shot; rate-limit: 1 req/s, set UA from env).
       const ua = process.env.NOMINATIM_USER_AGENT ?? "Dryline/0.0.1";
@@ -41,6 +43,9 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
 
       const geoRes = await fetch(nominatimUrl, { headers: { "User-Agent": ua } });
       if (!geoRes.ok) throw new Error(`Nominatim ${geoRes.status}`);
+      sources.push(
+        source({ title: "Nominatim — geocoding", url: nominatimUrl.toString(), publisher: "OpenStreetMap" }),
+      );
       const geoJson = (await geoRes.json()) as Array<{
         lat: string;
         lon: string;
@@ -52,14 +57,14 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
         return {
           data: null,
           caveats: [{ severity: "error", category: "inference", message: "Geocoder returned no results for that address." }],
-          sources: [source({ title: "Nominatim", url: nominatimUrl.toString(), publisher: "OpenStreetMap" })],
+          sources,
         };
       }
       if (top.address?.state !== "Texas") {
         return {
           data: null,
           caveats: [{ severity: "error", category: "bounds", message: "Address resolved outside Texas. Dryline only covers TX." }],
-          sources: [source({ title: "Nominatim", url: nominatimUrl.toString(), publisher: "OpenStreetMap" })],
+          sources,
         };
       }
 
@@ -67,6 +72,7 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
       const lng = Number(top.lon);
 
       // 2. Census Geocoder for county FIPS (Nominatim doesn't always include it cleanly).
+      // Census 502s under load; one quick retry.
       const censusUrl = new URL("https://geocoding.geo.census.gov/geocoder/geographies/coordinates");
       censusUrl.searchParams.set("x", String(lng));
       censusUrl.searchParams.set("y", String(lat));
@@ -75,8 +81,15 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
       censusUrl.searchParams.set("layers", "Counties");
       censusUrl.searchParams.set("format", "json");
 
-      const censusRes = await fetch(censusUrl);
+      let censusRes = await fetch(censusUrl);
+      if (!censusRes.ok && censusRes.status >= 500) {
+        await new Promise((r) => setTimeout(r, 400));
+        censusRes = await fetch(censusUrl);
+      }
       if (!censusRes.ok) throw new Error(`Census ${censusRes.status}`);
+      sources.push(
+        source({ title: "Census Geocoder — county FIPS", url: censusUrl.toString(), publisher: "U.S. Census Bureau" }),
+      );
       const censusJson = (await censusRes.json()) as {
         result?: { geographies?: { Counties?: Array<{ GEOID?: string; NAME?: string }> } };
       };
@@ -102,16 +115,13 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
           freshnessCaveat({ asOf: new Date().toISOString().slice(0, 10), cadence: "live (geocoder)" }),
           boundsCaveat("Watershed (HUC-12), GCD, and PWS enrichment are not yet wired in."),
         ],
-        sources: [
-          source({ title: "Nominatim — geocoding", url: nominatimUrl.toString(), publisher: "OpenStreetMap" }),
-          source({ title: "Census Geocoder — county FIPS", url: censusUrl.toString(), publisher: "U.S. Census Bureau" }),
-        ],
+        sources,
       };
     } catch (err) {
       return {
         data: null,
         caveats: [errorCaveat(err, "resolve_location failed")],
-        sources: [],
+        sources,
       };
     }
   },

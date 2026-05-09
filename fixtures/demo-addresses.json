@@ -1,0 +1,96 @@
+{
+  "$comment": "Canonical demo addresses for Dryline. Live trio (rehearsed) + four in-the-chamber. See PROPOSAL.md → Demo lineup.",
+  "locations": [
+    {
+      "id": "wimberley-hill-country",
+      "label": "Wimberley, TX — Hill Country private well",
+      "city": "Wimberley",
+      "county": "Hays",
+      "countyFips": "48209",
+      "region": "Hill Country",
+      "mode": "personal",
+      "live": true,
+      "headlineStory": "Trinity Aquifer is dropping ~1.8 ft/yr; the Blanco River goes dry in summer. Will the water last here?",
+      "drafts": ["watering-reminder", "well-outlook-briefing"],
+      "approxLatLng": { "lat": 29.997, "lng": -98.099 }
+    },
+    {
+      "id": "taylor-samsung-fab",
+      "label": "Taylor, TX — Samsung $17B semiconductor fab",
+      "city": "Taylor",
+      "county": "Williamson",
+      "countyFips": "48491",
+      "region": "Central / I-35 corridor",
+      "mode": "transparency",
+      "live": true,
+      "headlineStory": "A fab in a town of 16,000 draws several MGD from Lake Granger and the Trinity Aquifer. Who's drinking your aquifer?",
+      "drafts": ["public-comment", "industrial-water-onepager"],
+      "approxLatLng": { "lat": 30.5712, "lng": -97.4087 }
+    },
+    {
+      "id": "fort-stockton-comanche-springs",
+      "label": "Fort Stockton, TX — Comanche Springs",
+      "city": "Fort Stockton",
+      "county": "Pecos",
+      "countyFips": "48371",
+      "region": "West Texas / Trans-Pecos",
+      "mode": "transparency",
+      "live": true,
+      "headlineStory": "Comanche Springs flowed for centuries until 1950s irrigation pumping dried them up. The Belding case cemented rule-of-capture. Live permit fight: Republic Water → El Paso.",
+      "drafts": ["gcd-letter", "historical-briefing"],
+      "approxLatLng": { "lat": 30.8854, "lng": -102.8771 }
+    },
+    {
+      "id": "houston-memorial-buffalo-bayou",
+      "label": "Houston Memorial — Buffalo Bayou",
+      "city": "Houston",
+      "county": "Harris",
+      "countyFips": "48201",
+      "region": "Coast / East Texas",
+      "mode": "personal",
+      "live": false,
+      "headlineStory": "Harvey-zone flood exposure layered against drinking water and Addicks/Barker reservoir release context.",
+      "drafts": ["flood-insurance-prompt", "reservoir-release-subscription"],
+      "approxLatLng": { "lat": 29.7752, "lng": -95.4618 }
+    },
+    {
+      "id": "lubbock-ogallala",
+      "label": "Lubbock, TX — Ogallala Aquifer",
+      "city": "Lubbock",
+      "county": "Lubbock",
+      "countyFips": "48303",
+      "region": "Panhandle / High Plains",
+      "mode": "transparency",
+      "live": false,
+      "headlineStory": "The canonical American aquifer-depletion story. Decades of decline, cotton irrigation as the named driver.",
+      "drafts": ["county-water-plan-summary"],
+      "approxLatLng": { "lat": 33.5779, "lng": -101.8552 }
+    },
+    {
+      "id": "el-paso-hueco-bolson",
+      "label": "El Paso, TX — Hueco Bolson + KBH desalination",
+      "city": "El Paso",
+      "county": "El Paso",
+      "countyFips": "48141",
+      "region": "Far West Texas",
+      "mode": "personal",
+      "live": false,
+      "headlineStory": "A positive water story — largest inland desalination plant in the U.S., Hueco Bolson management, treaty water from Mexico.",
+      "drafts": ["water-rate-context"],
+      "approxLatLng": { "lat": 31.7619, "lng": -106.485 }
+    },
+    {
+      "id": "san-antonio-edwards-recharge",
+      "label": "San Antonio — Edwards Aquifer recharge zone",
+      "city": "San Antonio",
+      "county": "Bexar",
+      "countyFips": "48029",
+      "region": "Central / I-35 corridor",
+      "mode": "transparency",
+      "live": false,
+      "headlineStory": "Most-regulated aquifer in Texas. EAA permit caps, J-17 monitoring well, growth pressure.",
+      "drafts": ["public-comment", "recharge-zone-explainer"],
+      "approxLatLng": { "lat": 29.4241, "lng": -98.4936 }
+    }
+  ]
+}

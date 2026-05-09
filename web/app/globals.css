@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dryline palette — topographic, not civic-tech blue.
+   Stone base from shadcn, layered with reservoir blues and arid earth tones. */
+
+@layer base {
+  :root {
+    --background: 36 33% 97%;            /* warm paper */
+    --foreground: 24 10% 10%;            /* charcoal */
+    --card: 36 33% 99%;
+    --card-foreground: 24 10% 10%;
+    --popover: 36 33% 99%;
+    --popover-foreground: 24 10% 10%;
+    --primary: 202 43% 32%;              /* reservoir-700 */
+    --primary-foreground: 36 33% 97%;
+    --secondary: 36 30% 92%;
+    --secondary-foreground: 24 10% 10%;
+    --muted: 36 25% 90%;
+    --muted-foreground: 24 8% 35%;
+    --accent: 33 47% 38%;                /* arid-700 */
+    --accent-foreground: 36 33% 97%;
+    --destructive: 0 60% 40%;
+    --destructive-foreground: 36 33% 97%;
+    --border: 36 20% 85%;
+    --input: 36 20% 85%;
+    --ring: 202 43% 32%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 24 10% 8%;
+    --foreground: 36 33% 95%;
+    --card: 24 10% 10%;
+    --card-foreground: 36 33% 95%;
+    --popover: 24 10% 10%;
+    --popover-foreground: 36 33% 95%;
+    --primary: 202 35% 60%;
+    --primary-foreground: 24 10% 8%;
+    --secondary: 24 10% 14%;
+    --secondary-foreground: 36 33% 95%;
+    --muted: 24 10% 14%;
+    --muted-foreground: 24 8% 65%;
+    --accent: 33 35% 60%;
+    --accent-foreground: 24 10% 8%;
+    --destructive: 0 50% 45%;
+    --destructive-foreground: 36 33% 95%;
+    --border: 24 10% 18%;
+    --input: 24 10% 18%;
+    --ring: 202 35% 60%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+}

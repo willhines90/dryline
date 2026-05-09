@@ -54,36 +54,60 @@ export const getDroughtStatus: DrylineTool<Input, DroughtStatusOutput> = {
       url.searchParams.set("enddate", fmt(now));
       url.searchParams.set("statisticsType", "1");
 
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      // The USDM service occasionally returns 500s under load; one quick retry.
+      let res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!res.ok && res.status >= 500) {
+        await new Promise((r) => setTimeout(r, 500));
+        res = await fetch(url, { headers: { Accept: "application/json" } });
+      }
       if (!res.ok) throw new Error(`USDM ${res.status}`);
-      const rows = (await res.json()) as Array<{
-        MapDate: string;
-        None: string; D0: string; D1: string; D2: string; D3: string; D4: string;
-      }>;
+
+      // The service returns rows with camelCase keys (mapDate, none, d0, ...).
+      // Tolerate either casing in case the upstream changes.
+      const rawRows = (await res.json()) as Array<Record<string, unknown>>;
+      const pick = (row: Record<string, unknown>, ...keys: string[]) => {
+        for (const k of keys) if (row[k] != null) return row[k];
+        return undefined;
+      };
+      const rows = rawRows
+        .map((row) => ({
+          mapDate: String(pick(row, "mapDate", "MapDate") ?? ""),
+          None: Number(pick(row, "none", "None")),
+          D0: Number(pick(row, "d0", "D0")),
+          D1: Number(pick(row, "d1", "D1")),
+          D2: Number(pick(row, "d2", "D2")),
+          D3: Number(pick(row, "d3", "D3")),
+          D4: Number(pick(row, "d4", "D4")),
+        }))
+        .filter((r) => r.mapDate)
+        .sort((a, b) => a.mapDate.localeCompare(b.mapDate));
       const latest = rows.at(-1);
       if (!latest) throw new Error("USDM returned no rows");
 
       const areaPercent: Record<DroughtCategory, number> = {
-        None: Number(latest.None),
-        D0: Number(latest.D0),
-        D1: Number(latest.D1),
-        D2: Number(latest.D2),
-        D3: Number(latest.D3),
-        D4: Number(latest.D4),
+        None: latest.None,
+        D0: latest.D0,
+        D1: latest.D1,
+        D2: latest.D2,
+        D3: latest.D3,
+        D4: latest.D4,
       };
 
       // Highest category that has > 0% area is the headline classification.
       const order: DroughtCategory[] = ["D4", "D3", "D2", "D1", "D0", "None"];
       const category = order.find((c) => areaPercent[c] > 0) ?? "None";
 
+      // Render asOf as YYYY-MM-DD; the API returns ISO timestamps.
+      const asOf = latest.mapDate.slice(0, 10);
+
       return {
         data: {
           category,
-          asOf: latest.MapDate,
+          asOf,
           areaPercent,
         },
         caveats: [
-          freshnessCaveat({ asOf: latest.MapDate, cadence: "weekly (Thursdays)" }),
+          freshnessCaveat({ asOf, cadence: "weekly (Thursdays)" }),
           {
             severity: "info",
             category: "bounds",

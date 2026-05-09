@@ -93,8 +93,13 @@ export interface DrylineTool<TInput, TOutput> {
   name: string;
   /** One-paragraph description shown to the agent. */
   description: string;
-  /** Zod schema for the input arguments. */
-  inputSchema: z.ZodType<TInput>;
+  /**
+   * Zod schema for the input arguments.
+   * The third generic is `any` so schemas that use `.default(...)` — whose
+   * input type is `T | undefined` while their parsed output is `T` — still
+   * satisfy the contract.
+   */
+  inputSchema: z.ZodType<TInput, z.ZodTypeDef, any>;
   /** Run the tool. Must always return a ToolResult — never throw. */
   run: (input: TInput) => Promise<ToolResult<TOutput>>;
 }

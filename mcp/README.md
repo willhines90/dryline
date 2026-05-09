@@ -59,3 +59,10 @@ codex mcp add dryline-mcp --command="node $(pwd)/dist/index.js"
 Some sources don't have queryable APIs (TWDB GWDB, TNRIS floodplain, TNRIS parcels). They get loaded into DuckDB at server start. Fetch scripts will live under `scripts/snapshots/` (TODO).
 
 Snapshot files go to `./data/snapshots/` (gitignored). The DuckDB file goes to `./data/dryline.duckdb` (gitignored).
+
+### DuckDB is an optional dependency
+
+`duckdb-async` is listed under `optionalDependencies` because the native-binding install can be slow or fail in sandboxed environments. The MCP server boots without it; snapshot-backed tools (6–8) surface a warning Caveat when DuckDB is unavailable. The minimum viable winning version (tools 1–5) hits live APIs only and does not need DuckDB.
+
+To force-skip the install: `pnpm install --no-optional`.
+To install it later: `pnpm add duckdb-async --filter @dryline/mcp`.

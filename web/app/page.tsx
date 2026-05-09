@@ -11,8 +11,20 @@
  */
 
 import demoAddresses from "../../fixtures/demo-addresses.json";
+import { TexasMap } from "@/components/texas-map";
+import type { DemoLocation } from "@/lib/types";
+
+type DemoAddress = DemoLocation & {
+  approxLatLng?: {
+    lat: number;
+    lng: number;
+  };
+  live?: boolean;
+};
 
 export default function HomePage() {
+  const locations = demoAddresses.locations as DemoAddress[];
+
   return (
     <main className="min-h-screen flex flex-col">
       <header className="border-b border-border px-6 py-4 flex items-baseline justify-between bg-background">
@@ -27,29 +39,30 @@ export default function HomePage() {
         </nav>
       </header>
 
-      <section className="flex-1 grid grid-cols-12 gap-0">
-        <div className="col-span-8 bg-reservoir-50 flex items-center justify-center text-reservoir-700">
-          {/* MapLibre map mounts here. See AGENTS.md for the cinematic sequence. */}
-          <div className="text-center font-serif">
-            <p className="text-lg">Map area</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              MapLibre + topographic basemap goes here.
-            </p>
-          </div>
+      <section className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0">
+        <div className="lg:col-span-8 border-b border-border lg:border-b-0">
+          <TexasMap locations={locations} />
         </div>
-        <aside className="col-span-4 border-l border-border p-6 space-y-4">
+        <aside className="lg:col-span-4 border-l-0 lg:border-l border-border p-6 space-y-4 bg-background">
           <h2 className="font-serif text-lg">Demo addresses</h2>
           <p className="text-xs text-muted-foreground">
             Pre-staged for the live demo. Click an address to start an investigation.
           </p>
           <ul className="space-y-2">
-            {demoAddresses.locations.map((loc) => (
+            {locations.map((loc) => (
               <li
                 key={loc.id}
-                className="text-sm border border-border rounded-md p-3 hover:bg-arid-50 cursor-pointer transition-colors"
+                className="text-sm border border-border rounded-md bg-card p-3 hover:bg-arid-50 cursor-pointer transition-colors"
               >
-                <div className="font-medium">{loc.label}</div>
-                <div className="text-xs text-muted-foreground mt-1">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium">{loc.label}</div>
+                  {loc.live ? (
+                    <span className="rounded-full bg-reservoir-100 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-reservoir-700">
+                      Live
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1 capitalize">
                   {loc.mode} · {loc.region}
                 </div>
                 <div className="text-xs text-foreground/70 mt-2 font-serif italic">

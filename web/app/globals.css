@@ -1,3 +1,5 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -52,7 +54,35 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "ss01", "cv11";
+  }
+}
+
+@layer components {
+  .dryline-map .maplibregl-ctrl-group {
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--card));
+    box-shadow: 0 1px 2px rgb(15 38 50 / 0.12);
+  }
+
+  .dryline-map .maplibregl-ctrl button .maplibregl-ctrl-icon {
+    filter: sepia(0.45) saturate(0.7);
+  }
+
+  .dryline-map .maplibregl-popup-content {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    padding: 0;
+    box-shadow: 0 20px 35px rgb(15 38 50 / 0.18);
+  }
+
+  .dryline-map .maplibregl-popup-tip {
+    border-top-color: hsl(var(--card));
   }
 }

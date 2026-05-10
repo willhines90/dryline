@@ -23,13 +23,15 @@ Before you walk on stage:
 
 ---
 
-## Demo 0 — Hook (0:00–0:15) · land the line dead-flat
+## Demo 0 — Hook (0:00–0:20) · land the line dead-flat
 
 **Verbatim:**
-> "Texas added 4 million people in five years. Our water didn't keep up. Dryline tells you what that means at any address."
+> "Texas added 4 million people in five years. Our water didn't keep up. First Street tells you flood risk. EJScreen tells you pollution. Neither tells you what's happening to *your* water. Dryline does."
 
 **On screen:** title card → fade into the live map. Cursor parked off-screen.
-**Discipline:** No theatrics. Pause one full second after "any address." Then click Wimberley.
+**Discipline:** No theatrics. Pause one full second after "your water." Then click Wimberley.
+
+**Why the callback to First Street and EJScreen matters:** the pitch's slide 4 set up the gap; this hook lets the audience hold the framing in their head while you demo. If you're running short on time and skipped slide 4 in the pitch, you can drop the callback and revert to the shorter version: *"Texas added 4 million people in five years. Our water didn't keep up. Dryline tells you what that means at any address."*
 
 ---
 
@@ -47,7 +49,7 @@ Before you walk on stage:
 | 1.5 | Synthesized summary appears with inline citations. Hover one to show the source URL + retrieval timestamp. | "The summary cites every claim. Hover any sentence — it links back to the source with a timestamp." |
 | 1.6 | Click the **Actions** tab. A draft *"Should I deepen my well?"* artifact slides in with a cost-estimate range based on Hays County driller depth records. | "And the agent drafts a concrete next step — should I deepen my well? Here's the depth-cost band based on local driller data." |
 
-**Time check:** Should hit ~0:50 here. Move to Taylor.
+**Time check:** Should hit ~0:55–1:00 here. Move to Taylor.
 
 ---
 
@@ -67,7 +69,7 @@ Before you walk on stage:
 | 2.7 | Scroll the comment briefly so the citations are visible. | **Verbatim:** *"This is the moment Dryline stops being a tool and starts being an agent. Public data went in. A fileable civic action came out."* |
 | 2.8 | Show the *"Review before sending"* affordance at the bottom of the comment. | "It's a draft. It says so. The agent doesn't file it for you — it puts it in your hands." |
 
-**Time check:** Should hit ~2:20 here. Move to Fort Stockton.
+**Time check:** Should hit ~2:25 here. Move to Fort Stockton (or skip it — see Cuts).
 
 ---
 
@@ -85,7 +87,7 @@ Before you walk on stage:
 | 3.5 | Synthesized summary appears: history + present, with citations to the case law and to the live permit filing. | "The summary connects history to the live permit fight. Both cited. Both real." |
 | 3.6 | Click **Actions**. A drafted GCD board letter slides in. | "Drafted action: a letter to the GCD board, tied to the live permit. Same discipline. Same citation rigor." |
 
-**Time check:** Should hit ~3:10. Move to the close.
+**Time check:** Should hit ~3:15. Move to the close.
 
 ---
 
@@ -102,7 +104,7 @@ That's it. No second ask. Hand back to the pitch.
 
 If you forget everything else, land these four:
 
-1. **Hook (Demo 0):** *"Texas added 4 million people in five years. Our water didn't keep up. Dryline tells you what that means at any address."*
+1. **Hook (Demo 0):** *"Texas added 4 million people in five years. Our water didn't keep up. First Street tells you flood risk. EJScreen tells you pollution. Neither tells you what's happening to your water. Dryline does."*
 2. **Demo 2, the tension:** *"It cross-referenced two things on its own — the aquifer is in decline, AND a 4.2 million-gallon-per-day permit was filed nearby in March. No human told it to put those side by side."*
 3. **Demo 2, the hand-off:** *"This is the moment Dryline stops being a tool and starts being an agent. Public data went in. A fileable civic action came out."*
 4. **Demo 3, the modern echo:** *"Same aquifer. Same doctrine. Seventy years later."*
@@ -133,11 +135,12 @@ If you forget everything else, land these four:
 
 ## Cuts to make if you're running long
 
-In order:
+The pitch + demo + close now adds up to roughly 5:20 with the landscape slide and the extended hook. To fit 5:00, drop one of these in order:
 
-1. **Drop Fort Stockton entirely.** Wimberley + Taylor cover personal + transparency, and Taylor carries the hero artifact.
-2. **Trim Wimberley to 30 seconds** — skip the Drought card narration.
+1. **Drop Fort Stockton entirely** (saves ~50s). Wimberley + Taylor cover personal + transparency, and Taylor carries the hero artifact. **This is the recommended cut** when the landscape slide is in the deck.
+2. **Trim Wimberley to 30 seconds** — skip the Drought card narration (saves ~10s).
 3. **Trim Taylor to 60 seconds** — skip the "review before sending" beat (it's visible on screen).
+4. **Revert Demo 0 hook to the short version** (saves ~5s) — only if pitch slide 4 was also cut.
 
 Never cut: the cross-reference tension beat in Taylor, the public-comment artifact, or the Comanche Springs flatline if you're keeping Fort Stockton at all.
 

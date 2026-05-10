@@ -35,7 +35,7 @@ import { ComparisonHero } from "@/components/dryline/comparison-hero";
 import { AboutModal } from "@/components/dryline/about-modal";
 import { AgenticToggle } from "@/components/dryline/agentic-toggle";
 import { TraceSkeleton } from "@/components/dryline/trace-skeleton";
-import type { TraceEvent } from "@/lib/types";
+import { DarkModeProvider, DarkModeToggle } from "@/components/dryline/dark-mode-toggle";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -46,9 +46,11 @@ export default function HomePage() {
     (l) => l.approxLatLng,
   );
   return (
-    <InvestigationProvider>
-      <PageShell locations={locations} />
-    </InvestigationProvider>
+    <DarkModeProvider>
+      <InvestigationProvider>
+        <PageShell locations={locations} />
+      </InvestigationProvider>
+    </DarkModeProvider>
   );
 }
 
@@ -91,6 +93,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             <ModeToggle value={globalMode} onChange={setGlobalMode} />
             <CompareToggle />
             <AgenticToggle />
+            <DarkModeToggle />
             <button
               type="button"
               onClick={() => setAboutOpen(true)}

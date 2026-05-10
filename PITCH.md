@@ -1,6 +1,6 @@
 # Dryline — Pitch Narrative
 
-**Slot:** 5 minutes total · ~90s narrative → ~3 min live demo → ~30s close
+**Slot:** 5 minutes total · ~1:45 narrative → ~3 min live demo → ~30s close
 **Audience:** AITX × Codex Hackathon judges (Brainforge / Vicinity Texas Open Data Track + Agents Track)
 **Voice:** Quietly intelligent. Spare. Concrete. Cites everything. Never dramatizes.
 
@@ -39,7 +39,25 @@
 
 ---
 
-## Slide 4 — What Dryline is (15s)
+## Slide 4 — Where Dryline sits (15s)
+
+**Visual:** Four cards in a row, each one a competitor framed by what they do and where they stop. The fifth slot — Dryline — sits below them, occupying the empty space where their gaps overlap.
+
+| Tool | Tells you | Doesn't |
+|---|---|---|
+| First Street / Risk Factor | Flood, fire, heat at any address | Water supply |
+| EPA EJScreen | Pollution + EJ indicators by Census block | Address-level water supply |
+| TWDB dashboards | Texas water in aggregate | Anchored to your address |
+| TLWP Scorecard | Conservation by utility | Interactive · narrative · timely |
+
+**Headline:** *The address-based environmental tools you know stop where water supply begins.*
+
+**Spoken:**
+> "There are four kinds of tools nearby. First Street tells you flood risk at any address — but never water supply. EJScreen covers pollution by census block — never water supply. TWDB has the water data — but in dashboards built for analysts, never anchored to your address. The Texas Living Waters Scorecard gets the issue right — but it's a PDF. Nothing in market stacks all four — synthesis, interpretation, action, and water-as-the-lens. That's where Dryline lives."
+
+---
+
+## Slide 5 — What Dryline is (15s)
 
 **Visual:** Three-pane diagram. Map (left) → reasoning trace streaming (center) → drafted public-comment artifact (right). A subtle arrow connects the panes.
 
@@ -50,7 +68,7 @@
 
 ---
 
-## Slide 5 — Two modes, one investigation (10s)
+## Slide 6 — Two modes, one investigation (10s)
 
 **Visual:** Split panel — same Texas map, two different side rails. Left: warm Personal-mode card ("Will the water last here?"). Right: cooler Transparency-mode card ("Who's drinking your aquifer?").
 
@@ -61,7 +79,7 @@
 
 ---
 
-## Slide 6 — How it's built (15s)
+## Slide 7 — How it's built (15s)
 
 **Visual:** Three boxes — `mcp/` `skill/` `web/` — sitting on top of a row of 8 dataset logos. Above them, a banner: "OpenAI Responses API + MCP. Built with Codex."
 
@@ -72,7 +90,7 @@
 
 ---
 
-## Slide 7 — Live demo (handoff, 5s)
+## Slide 8 — Live demo (handoff, 5s)
 
 **Visual:** Just the wordmark, a soft contour-line motif, and the line *"Three addresses. Three modes of impact."*
 
@@ -83,7 +101,7 @@
 
 ---
 
-## Slide 8 — What we shipped, against the criteria (20s)
+## Slide 9 — What we shipped, against the criteria (20s)
 
 *Use this slide ONLY if there's time after the demo. If not, the demo carries this weight on its own.*
 
@@ -94,14 +112,14 @@
 | **Technical execution** | MCP server (6 tools), portable agent skill, Next.js map app. 5 live APIs + 1 curated snapshot (TWDB GWDB). |
 | **Partner ecosystem** | Built with Codex. Runtime on OpenAI Responses API + MCP. Shipped against both required deliverables in the brief. |
 | **Value & impact** | Two modes, two real users — homeowner and citizen. Hero artifact is a fileable public comment on a live TCEQ permit. |
-| **Innovation** | Visible agent reasoning over a water *dependency graph*, not a flat dataset. Citations are first-class. Action drafts close the loop from data to civic process. |
+| **Innovation** | Visible agent reasoning over a water *dependency graph,* not a flat dataset. Citations are first-class. Action drafts close the loop from data to civic process. |
 
 **Spoken (only if needed):**
 > "Six tools, two modes, three rehearsed addresses, every claim cited. The full architecture — MCP, skill, web — is open source and on GitHub now."
 
 ---
 
-## Slide 9 — Open source · what's next (10s)
+## Slide 10 — Open source · what's next (10s)
 
 **Visual:** GitHub URL + MIT license badge + a Texas map shaded to show the seven demo regions. Two blank regions — Coastal Bend and Rio Grande Valley — pulse softly with a "next" tag.
 
@@ -112,7 +130,7 @@
 
 ---
 
-## Slide 10 — Close (10s)
+## Slide 11 — Close (10s)
 
 **Visual:** Return to the dusk map of Texas with the dryline glowing. The wordmark fades up. Beneath it, the tagline rotates from *Investigate Texas water at any address* to *The line between you and your water*.
 
@@ -123,22 +141,24 @@
 
 ## Pacing notes
 
-- **0:00–1:30** — slides 1 through 6. Move briskly; do not linger on slide 2 (problem statement). The audience already believes this.
-- **1:30–4:30** — live demo (Wimberley → Taylor → Fort Stockton).
-- **4:30–5:00** — slide 8 *or* skip to slide 9 + slide 10. Pick on the day based on how the demo lands.
+- **0:00–1:45** — slides 1 through 7. Move briskly; do not linger on slide 2 (problem statement). The audience already believes this.
+- **Slide 4 is the load-bearing slide.** It answers the unspoken "but doesn't this exist?" before the judges have to ask. Hold the four cards on screen for the full 15 seconds — let the audience read them.
+- **1:45–4:30** — live demo (Wimberley → Taylor → Fort Stockton). See `DEMO.md`.
+- **4:30–5:00** — slide 9 *or* skip to slide 10 + slide 11. Pick on the day based on how the demo lands.
 
 ## What to cut if you're running long
 
-1. Slide 8 — the demo already proved each criterion.
-2. Slide 5 — the mode toggle is visible in the live demo.
-3. The Fort Stockton demo address — keep Wimberley + Taylor only.
+1. **Slide 9** — the demo already proved each criterion.
+2. **Slide 6** — the mode toggle is visible in the live demo.
+3. **The Fort Stockton demo address** — keep Wimberley + Taylor only.
 
 ## What to never cut
 
-1. The Comanche Springs flatline reveal in the Fort Stockton demo. It's the moment the room goes quiet.
-2. The "tension" beat in the Taylor demo where the agent surfaces the open TCEQ permit.
-3. The closing line. Land it.
+1. **Slide 4 (Where Dryline sits).** This is the difference between "cool agent demo" and "novel category." Without it, judges can't tell us apart from "another civic data dashboard."
+2. The Comanche Springs flatline reveal in the Fort Stockton demo. It's the moment the room goes quiet.
+3. The "tension" beat in the Taylor demo where the agent surfaces the open TCEQ permit.
+4. The closing line. Land it.
 
 ---
 
-*Companion: see `DEMO.md` for the live-demo beat sheet.*
+*Companions: see `DEMO.md` for the live-demo beat sheet, `LANDSCAPE.md` for the full competitive analysis behind slide 4.*

@@ -8,7 +8,7 @@ export type LayerKey = "drought" | "reservoirs" | "rivers" | "aquifers" | "gauge
 export interface LayerSpec {
   key: LayerKey;
   label: string;
-  swatch: string; // hex
+  swatch: string;
   /** When true, the toggle is rendered but disabled (data not available). */
   disabled?: boolean;
   hint?: string;
@@ -57,29 +57,44 @@ interface LayerControlProps {
   state: Record<LayerKey, boolean>;
   onToggle(k: LayerKey): void;
   className?: string;
+  /** Match the dark/live cartography variant. */
+  dark?: boolean;
 }
 
-export function LayerControl({ specs, state, onToggle, className }: LayerControlProps) {
+export function LayerControl({ specs, state, onToggle, className, dark }: LayerControlProps) {
   const [open, setOpen] = React.useState(true);
   return (
     <div
       className={cn(
-        "border border-rule bg-paper-deep/95 backdrop-blur-sm shadow-paper",
+        "border backdrop-blur-sm shadow-paper",
+        dark
+          ? "border-aquifer/50 bg-[rgba(8,14,22,0.85)]"
+          : "border-rule bg-paper-deep/95",
         className,
       )}
     >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink"
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2",
+          "font-mono text-[10px] tracking-[0.18em] uppercase",
+          dark ? "text-spring hover:text-paper" : "text-tideline hover:text-ink",
+        )}
       >
         <span>Layers</span>
         <span aria-hidden>{open ? "−" : "+"}</span>
       </button>
       {open ? (
-        <ul className="border-t border-rule">
+        <ul className={cn("border-t", dark ? "border-aquifer/40" : "border-rule")}>
           {specs.map((s) => (
-            <li key={s.key} className="border-b border-rule last:border-b-0">
+            <li
+              key={s.key}
+              className={cn(
+                "border-b last:border-b-0",
+                dark ? "border-aquifer/30" : "border-rule",
+              )}
+            >
               <button
                 type="button"
                 onClick={() => !s.disabled && onToggle(s.key)}
@@ -88,16 +103,23 @@ export function LayerControl({ specs, state, onToggle, className }: LayerControl
                   "w-full flex items-center gap-2 px-3 py-1.5 text-left",
                   "font-mono text-[10.5px] tracking-[0.12em] uppercase",
                   s.disabled
-                    ? "opacity-40 cursor-not-allowed text-tideline"
+                    ? cn("opacity-40 cursor-not-allowed", dark ? "text-spring/60" : "text-tideline")
                     : state[s.key]
-                    ? "text-ink"
+                    ? dark
+                      ? "text-paper"
+                      : "text-ink"
+                    : dark
+                    ? "text-spring hover:text-paper"
                     : "text-tideline hover:text-ink",
                 )}
                 title={s.hint ?? s.label}
               >
                 <span
                   aria-hidden
-                  className="w-3 h-3 inline-block border border-ink/30 shrink-0"
+                  className={cn(
+                    "w-3 h-3 inline-block border shrink-0",
+                    dark ? "border-aquifer/50" : "border-ink/30",
+                  )}
                   style={{ background: state[s.key] ? s.swatch : "transparent" }}
                 />
                 <span className="truncate">{s.label}</span>
@@ -105,7 +127,13 @@ export function LayerControl({ specs, state, onToggle, className }: LayerControl
                   aria-hidden
                   className={cn(
                     "ml-auto font-mono text-[8.5px] tracking-[0.18em]",
-                    state[s.key] ? "text-ink" : "text-tideline",
+                    state[s.key]
+                      ? dark
+                        ? "text-paper"
+                        : "text-ink"
+                      : dark
+                      ? "text-spring/60"
+                      : "text-tideline",
                   )}
                 >
                   {s.disabled ? "—" : state[s.key] ? "ON" : "OFF"}

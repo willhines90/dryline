@@ -9,6 +9,21 @@ import {
   type LayerSpec,
   type LayerKey,
 } from "./dryline/layer-control";
+import { useDarkMode } from "./dryline/dark-mode-toggle";
+import { cn } from "@/lib/utils";
+
+function Swatch({ color }: { color: string }) {
+  return <span className="inline-block w-2.5 h-2.5 border border-ink/20" style={{ background: color }} />;
+}
+
+function Pin({ fill, ring }: { fill: string; ring: string }) {
+  return (
+    <span
+      className="inline-block w-2.5 h-2.5 rounded-full border-2"
+      style={{ background: fill, borderColor: ring }}
+    />
+  );
+}
 
 type MapInstance = import("maplibre-gl").Map;
 type MarkerInstance = import("maplibre-gl").Marker;
@@ -19,10 +34,15 @@ const TEXAS_BOUNDS: [[number, number], [number, number]] = [
   [-93.2, 36.8],
 ];
 
+/**
+ * Dual-basemap setup: both Voyager (paper) and Dark Matter (live) tiles
+ * are loaded as sources. Dark mode flips layer visibility — no full
+ * style swap, so all our overlays stay mounted across the toggle.
+ */
 const BASE_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    base: {
+    "base-paper": {
       type: "raster",
       tiles: [
         "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
@@ -34,8 +54,28 @@ const BASE_STYLE: StyleSpecification = {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · &copy; <a href="https://carto.com/attributions">CARTO</a>',
       maxzoom: 19,
     },
+    "base-dark": {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxzoom: 19,
+    },
   },
-  layers: [{ id: "base", type: "raster", source: "base" }],
+  layers: [
+    { id: "base-paper", type: "raster", source: "base-paper" },
+    {
+      id: "base-dark",
+      type: "raster",
+      source: "base-dark",
+      layout: { visibility: "none" },
+    },
+  ],
 };
 
 /** Curated set of major TX reservoirs we want pinned on the basemap. */
@@ -113,10 +153,23 @@ export function TexasMap({
   const onLocationClickRef = useRef(onLocationClick);
 
   const { state: layerState, toggle: toggleLayer } = useLayerToggles(LAYER_SPECS);
+  const { dark } = useDarkMode();
 
   useEffect(() => {
     onLocationClickRef.current = onLocationClick;
   }, [onLocationClick]);
+
+  // Flip basemap visibility when dark mode toggles.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    try {
+      map.setLayoutProperty("base-paper", "visibility", dark ? "none" : "visible");
+      map.setLayoutProperty("base-dark", "visibility", dark ? "visible" : "none");
+    } catch {
+      /* layer not yet mounted; safe */
+    }
+  }, [dark, mapReadyState]);
 
   // ---- 1. Map mount + permanent markers ----
   useEffect(() => {
@@ -397,6 +450,69 @@ export function TexasMap({
     }
   }, [layerState.reservoirs, mapReadyState]);
 
+  // ---- 5a. Texas state outline — permanent, always visible. Draws a
+  // thick aquifer-blue (or cyan in dark mode) outline of the state to
+  // make it clear the surface is TX-focused.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-tx-bounds";
+    const LINE = "dryline-tx-bounds-line";
+    const GLOW = "dryline-tx-bounds-glow";
+
+    const cleanup = () => {
+      try {
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getLayer(GLOW)) map.removeLayer(GLOW);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* idempotent */
+      }
+    };
+
+    (async () => {
+      try {
+        const res = await fetch("/tx-bounds.geojson", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, { type: "geojson", data: fc });
+        map.addLayer({
+          id: GLOW,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": dark ? "#5fc7ff" : "#0d3b6f",
+            "line-opacity": dark ? 0.45 : 0.18,
+            "line-width": dark ? 8 : 6,
+            "line-blur": dark ? 4 : 2,
+          },
+        });
+        map.addLayer({
+          id: LINE,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": dark ? "#9ec5cf" : "#0d3b6f",
+            "line-opacity": dark ? 0.95 : 0.7,
+            "line-width": dark ? 1.6 : 1.4,
+            "line-dasharray": [4, 2],
+          },
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] TX bounds layer failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [mapReadyState, dark]);
+
   // ---- 5b. Rivers layer (static GeoJSON) ----
   useEffect(() => {
     const map = mapRef.current;
@@ -425,14 +541,26 @@ export function TexasMap({
         cleanup();
         if (map.getSource(SRC)) return;
         map.addSource(SRC, { type: "geojson", data: fc });
+        // Glow underlayer — wider stroke at lower opacity so dark mode reads as "lit-up rivers".
+        map.addLayer({
+          id: `${LINE}-glow`,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": dark ? "#7ad6e9" : "#9ec5cf",
+            "line-opacity": dark ? 0.45 : 0.0,
+            "line-width": dark ? 6 : 0,
+            "line-blur": 2,
+          },
+        });
         map.addLayer({
           id: LINE,
           type: "line",
           source: SRC,
           paint: {
-            "line-color": "#0d3b6f",
-            "line-opacity": 0.55,
-            "line-width": 1.5,
+            "line-color": dark ? "#9ec5cf" : "#0d3b6f",
+            "line-opacity": dark ? 0.95 : 0.6,
+            "line-width": dark ? 2.5 : 1.5,
           },
         });
       } catch (err) {
@@ -443,8 +571,13 @@ export function TexasMap({
     return () => {
       cancelled = true;
       cleanup();
+      try {
+        if (map.getLayer(`${LINE}-glow`)) map.removeLayer(`${LINE}-glow`);
+      } catch {
+        /* idempotent */
+      }
     };
-  }, [layerState.rivers, mapReadyState]);
+  }, [layerState.rivers, mapReadyState, dark]);
 
   // ---- 5c. USGS gauges layer (live data) ----
   useEffect(() => {
@@ -507,31 +640,32 @@ export function TexasMap({
               ["linear"],
               ["zoom"],
               5,
-              2,
+              dark ? 3 : 2,
               8,
-              3,
+              dark ? 4.5 : 3,
               10,
-              4.5,
+              dark ? 6 : 4.5,
             ],
             // Color by current cfs (step expression on a coalesced number):
-            //   < 0.5 cfs (no reading or dry) → tideline gray
+            //   < 0.5 cfs (no reading or dry) → muted gray
             //   0.5–49 cfs                    → ochre (low flow)
             //   50–499 cfs                    → river (normal)
             //   ≥ 500 cfs                     → aquifer (high)
             "circle-color": [
               "step",
               ["coalesce", ["to-number", ["get", "cfs"]], -1],
-              "#4a6c78",
+              dark ? "#3a4d56" : "#4a6c78",
               0.5,
-              "#b58a52",
+              dark ? "#d6a06a" : "#b58a52",
               50,
-              "#4a8aa8",
+              dark ? "#7ad6e9" : "#4a8aa8",
               500,
-              "#0d3b6f",
+              dark ? "#5fc7ff" : "#0d3b6f",
             ],
-            "circle-stroke-color": "#eef2f3",
+            "circle-stroke-color": dark ? "#0a0e16" : "#eef2f3",
             "circle-stroke-width": 1,
-            "circle-opacity": 0.85,
+            "circle-opacity": dark ? 0.95 : 0.85,
+            "circle-blur": dark ? 0.15 : 0,
           },
         });
       } catch (err) {
@@ -543,7 +677,7 @@ export function TexasMap({
       cancelled = true;
       cleanup();
     };
-  }, [layerState.gauges, mapReadyState]);
+  }, [layerState.gauges, mapReadyState, dark]);
 
   // ---- 6. Storytelling: react to tool_result events ----
   useEffect(() => {
@@ -575,31 +709,103 @@ export function TexasMap({
     <div className="relative h-full min-h-0 overflow-hidden bg-foam">
       <div ref={containerRef} className="dryline-map absolute inset-0" />
 
-      {/* Drought scale legend (bottom-left). Compact, paper card. */}
-      <div className="pointer-events-none absolute left-4 bottom-4 border border-rule bg-paper/95 backdrop-blur-sm shadow-paper px-3 py-2 max-w-[220px]">
-        <p className="dryline-label mb-1.5">Drought · USDM</p>
-        <div className="flex h-2 mb-1">
-          {DROUGHT_COLORS.map((c, i) => (
-            <div key={i} className="flex-1" style={{ background: c }} />
-          ))}
+      {/* Branded multi-section legend (bottom-left). Editorial card with
+          drought ramp, gauge color stops, and pin-key — spelled out so a
+          first-time viewer doesn't have to guess what they're looking at. */}
+      <div
+        className={cn(
+          "pointer-events-none absolute left-4 bottom-4 max-w-[260px]",
+          "border backdrop-blur-sm shadow-paper",
+          dark
+            ? "border-aquifer/50 bg-[rgba(8,14,22,0.85)] text-spring"
+            : "border-rule bg-paper/95 text-ink",
+        )}
+      >
+        <div
+          className={cn(
+            "px-3 py-2 border-b font-mono text-[10px] tracking-[0.18em] uppercase",
+            dark ? "border-aquifer/40 text-spring/80" : "border-rule text-tideline",
+          )}
+        >
+          Legend · Texas water
         </div>
-        <div className="flex justify-between font-mono text-[8.5px] tracking-[0.16em] uppercase text-tideline">
-          <span>D0</span>
-          <span>D1</span>
-          <span>D2</span>
-          <span>D3</span>
-          <span>D4</span>
+        <div className="px-3 py-2.5 space-y-3">
+          {/* Drought ramp */}
+          <div>
+            <div className={cn(
+              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
+              dark ? "text-spring/70" : "text-tideline",
+            )}>
+              Drought · USDM
+            </div>
+            <div className="flex h-2.5">
+              {DROUGHT_COLORS.map((c, i) => (
+                <div key={i} className="flex-1" style={{ background: c }} />
+              ))}
+            </div>
+            <div className={cn(
+              "flex justify-between font-mono text-[8.5px] tracking-[0.16em] uppercase mt-0.5",
+              dark ? "text-spring/60" : "text-tideline",
+            )}>
+              <span>D0</span><span>D1</span><span>D2</span><span>D3</span><span>D4</span>
+            </div>
+          </div>
+          {/* Stream gauge stops */}
+          <div>
+            <div className={cn(
+              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
+              dark ? "text-spring/70" : "text-tideline",
+            )}>
+              Stream gauges · cfs
+            </div>
+            <div className="flex items-center gap-1.5 text-[10.5px]">
+              <Swatch color={dark ? "#3a4d56" : "#4a6c78"} />
+              <span className={dark ? "text-spring/80" : "text-ink/85"}>dry · &lt; 0.5</span>
+              <Swatch color={dark ? "#d6a06a" : "#b58a52"} />
+              <span className={dark ? "text-spring/80" : "text-ink/85"}>low · &lt; 50</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10.5px] mt-0.5">
+              <Swatch color={dark ? "#7ad6e9" : "#4a8aa8"} />
+              <span className={dark ? "text-spring/80" : "text-ink/85"}>normal · &lt; 500</span>
+              <Swatch color={dark ? "#5fc7ff" : "#0d3b6f"} />
+              <span className={dark ? "text-spring/80" : "text-ink/85"}>high · 500+</span>
+            </div>
+          </div>
+          {/* Pin key */}
+          <div>
+            <div className={cn(
+              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
+              dark ? "text-spring/70" : "text-tideline",
+            )}>
+              Pins
+            </div>
+            <ul className="space-y-0.5 text-[10.5px] leading-snug">
+              <li className="flex items-center gap-1.5">
+                <Pin fill="#0d3b6f" ring="#9ec5cf" />
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>Personal-mode address</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Pin fill="#b58a52" ring="#7a5a2c" />
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>Transparency-mode address</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full border-2"
+                  style={{ background: "#4a8aa8", borderColor: dark ? "#0a0e16" : "#d6e4e6" }}
+                />
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>TWDB reservoir (18)</span>
+              </li>
+            </ul>
+          </div>
         </div>
-        <p className="font-serif italic text-[11px] text-tideline mt-1.5 leading-snug">
-          None → exceptional. Reservoirs are tide-blue dots; demo pins are mode-colored.
-        </p>
       </div>
 
       <LayerControl
         specs={LAYER_SPECS}
         state={layerState}
         onToggle={toggleLayer}
-        className="pointer-events-auto absolute right-4 bottom-4 w-[220px]"
+        dark={dark}
+        className="pointer-events-auto absolute right-4 bottom-4 w-[230px]"
       />
 
       {mountError ? (

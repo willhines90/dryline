@@ -40,6 +40,26 @@ The cinematic flow, in three frames. Capture pass happens during PHASE 5 visual 
 
 ---
 
+## The Dryline Score
+
+Each investigation produces a single 0–100 number — the **Dryline Score** — at the top of the synthesis card. Higher = more water stress at that address. The number is the lede; the cited synthesis underneath is the why.
+
+**Composite of five subscores, equally weighted, integer mean:**
+
+| Subscore | Source | Scale |
+|---|---|---|
+| **Drought** | U.S. Drought Monitor county category | None=0, D0=20, D1=40, D2=60, D3=80, D4=100 |
+| **Aquifer** | TWDB monitoring-well decadal trend | ≤0 ft/yr (rising/steady) = 0; 0.5 = 30; 1.0 = 50; 1.5 = 70; 2.0+ = 90 |
+| **Drinking water** | EPA SDWIS (via ECHO) for the primary serving system | +30 per current health-based violation, +10 per current procedural, +5 per rule violated in last 3 yr; cap 100 |
+| **Industrial** | Count of individual NPDES permittees within 15 mi (EPA ECHO) | 0=0, 1=20, 2-3=40, 4-6=60, 7+=80 |
+| **Reservoir** | Nearest TWDB-instrumented reservoir's current % full vs same-day historical avg | ratio ≥1.05=0, 1.0=20, 0.85=40, 0.70=60, 0.55=80, ≤0.40=100 |
+
+Subscores with no available data score 50 (neutral) and the rationale field records the gap. The UI surfaces a "Why this number?" disclosure that shows each subscore's per-address rationale.
+
+**The number is reductive on purpose — and it will sometimes surprise you.** Wimberley scores 38/100 even on a D3-drought day, because the *single nearest* monitoring well at that address happens to be recovering — depth-to-water decreased from 180 ft in 2007 to ~102 ft in 2019 at well 5764717. Regional Trinity trends are worse; this single well isn't. The score is honest about that single-well coverage limit. Don't treat the score as an oracle; click through to the synthesis for the cited story.
+
+---
+
 ## Architecture choice — read this carefully
 
 Dryline ships its tools as **both a stdio MCP server** (`@dryline/mcp`) **and as in-process function tools for the web app**. The web demo uses a deterministic tool sequence by default for sub-25 s reliability; an `?agent=1` query flag enables real LLM-driven tool selection via the OpenAI Responses API. The MCP server is the composable artifact — anyone can attach it to Claude Code, Codex, or Cursor. The agent's judgment shows up in synthesis emphasis, action-artifact selection, and citation discipline.

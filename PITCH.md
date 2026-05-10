@@ -13,7 +13,7 @@
 **Sub-headline:** *Investigate Texas water at any address.*
 
 **Spoken:**
-> "A dryline is the boundary across Texas where moist Gulf air meets dry continental air. It's where Texas weather and Texas water meet, every day. We named our project after it."
+> "Texas added 4 million people in five years. Our water didn't keep up. A dryline is the meteorological line across Texas where Gulf air meets continental air. We named our project after it."
 
 ---
 
@@ -68,7 +68,7 @@
 **Headline:** *MCP server + agent skill + map-first web app.*
 
 **Spoken:**
-> "Three pieces. An MCP server with eight bounded tools, every one returning data, caveats, and sources. A portable agent skill — a SKILL.md plus references — that any compliant agent can load to get the same investigation discipline. And a Next.js + MapLibre web app that makes the reasoning trace cinematic. The brief said teams that ship both an MCP server *and* a skill are especially competitive. We shipped both."
+> "Three pieces. An MCP server with six bounded tools, every one returning data, caveats, and sources. A portable agent skill — a SKILL.md plus references — that any compliant agent can load to get the same investigation discipline. And a Next.js + MapLibre web app that makes the reasoning trace cinematic. The brief said teams that ship both an MCP server *and* a skill are especially competitive. We shipped both."
 
 ---
 
@@ -91,13 +91,13 @@
 
 | Judging criterion | Dryline |
 |---|---|
-| **Technical execution** | MCP server (8 tools), portable agent skill, Next.js map app. 5 live APIs + 4 snapshot sources in DuckDB. |
+| **Technical execution** | MCP server (6 tools), portable agent skill, Next.js map app. 5 live APIs + 1 curated snapshot (TWDB GWDB). |
 | **Partner ecosystem** | Built with Codex. Runtime on OpenAI Responses API + MCP. Shipped against both required deliverables in the brief. |
 | **Value & impact** | Two modes, two real users — homeowner and citizen. Hero artifact is a fileable public comment on a live TCEQ permit. |
 | **Innovation** | Visible agent reasoning over a water *dependency graph*, not a flat dataset. Citations are first-class. Action drafts close the loop from data to civic process. |
 
 **Spoken (only if needed):**
-> "Eight tools, two modes, three rehearsed addresses, every claim cited. The full architecture — MCP, skill, web — is open source and on GitHub now."
+> "Six tools, two modes, three rehearsed addresses, every claim cited. The full architecture — MCP, skill, web — is open source and on GitHub now."
 
 ---
 

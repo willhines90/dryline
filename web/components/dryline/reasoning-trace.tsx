@@ -5,6 +5,20 @@ import { useInvestigation } from "./investigation-provider";
 import type { Caveat, Source, ToolStartEvent, ToolResultEvent } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/**
+ * Plain-English labels for each tool, per Phase 4.5 Section A3 — these
+ * sit above the monospace `tool_name(...)` line so a non-technical viewer
+ * can follow the trace without parsing the API.
+ */
+const TOOL_LABELS: Record<string, string> = {
+  resolve_location: "Locating the address",
+  get_drought_status: "Checking drought conditions",
+  get_reservoirs: "Pulling nearby reservoir levels",
+  get_drinking_water: "Looking up the public water system",
+  get_big_users_nearby: "Finding industrial water permits nearby",
+  get_aquifer_status: "Reading the aquifer beneath this address",
+};
+
 function formatArgs(args: unknown): string {
   if (args == null) return "";
   if (typeof args === "string") return args;
@@ -26,9 +40,9 @@ function truncate(s: string, n: number): string {
 }
 
 function severityColor(severity: Caveat["severity"]): string {
-  if (severity === "error") return "text-red-700 bg-red-50";
-  if (severity === "warning") return "text-amber-800 bg-amber-50";
-  return "text-foreground/70 bg-arid-100";
+  if (severity === "error") return "text-rust border-rust bg-[#f3dcd2]";
+  if (severity === "warning") return "text-ochre-deep border-ochre-deep bg-[#f1e3c6]";
+  return "text-tideline border-rule bg-paper-deep";
 }
 
 function CitationChip({ index, source }: { index: number; source: Source }) {
@@ -38,7 +52,7 @@ function CitationChip({ index, source }: { index: number; source: Source }) {
       target="_blank"
       rel="noopener noreferrer"
       title={`${source.title} · retrieved ${source.retrievedAt.slice(0, 10)}`}
-      className="inline-flex items-center justify-center min-w-[1.5rem] h-5 rounded text-[10px] font-mono px-1 border border-reservoir-100 bg-reservoir-50 text-reservoir-700 hover:bg-reservoir-100 transition-colors"
+      className="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1 border border-rule bg-paper text-tide text-[10px] font-mono hover:border-tide hover:bg-foam transition-colors"
     >
       [{index}]
     </a>
@@ -47,13 +61,11 @@ function CitationChip({ index, source }: { index: number; source: Source }) {
 
 function ResultBlock({ result }: { result: ToolResultEvent }) {
   return (
-    <div className="pl-5 mt-1 space-y-1.5 text-xs">
-      <div className="text-foreground/85">{result.summary}</div>
+    <div className="pl-6 mt-1 space-y-2">
+      <div className="font-serif text-[14px] text-ink leading-snug">{result.summary}</div>
       {result.sources.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mr-1">
-            sources
-          </span>
+          <span className="dryline-label mr-1">sources</span>
           {result.sources.map((s, i) => (
             <CitationChip key={`${s.url}-${i}`} index={i + 1} source={s} />
           ))}
@@ -65,7 +77,7 @@ function ResultBlock({ result }: { result: ToolResultEvent }) {
             <span
               key={i}
               className={cn(
-                "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]",
+                "border px-1.5 py-px font-mono text-[9px] tracking-[0.14em] uppercase",
                 severityColor(c.severity),
               )}
               title={c.message}
@@ -80,19 +92,29 @@ function ResultBlock({ result }: { result: ToolResultEvent }) {
   );
 }
 
+function StatusDot({ state }: { state: "running" | "done" | "pending" }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-block w-2 h-2 rounded-full mt-2 shrink-0",
+        state === "done" && "bg-kelp",
+        state === "running" && "bg-aquifer animate-dryline-pulse",
+        state === "pending" && "bg-transparent border border-rule",
+      )}
+    />
+  );
+}
+
 export function ReasoningTrace() {
   const { traces, status } = useInvestigation();
-  const lastIsToolStart =
-    traces.length > 0 && traces[traces.length - 1]!.type === "tool_start";
-  const showActivePulse = status === "streaming" && lastIsToolStart;
 
-  // Pair tool_start with its tool_result for rendering.
+  // Pair tool_start with its tool_result.
   const grouped: Array<{ start: ToolStartEvent; result: ToolResultEvent | null }> = [];
   for (const ev of traces) {
     if (ev.type === "tool_start") {
       grouped.push({ start: ev, result: null });
     } else if (ev.type === "tool_result") {
-      // attach to the most-recent unresolved start with the same toolName
       for (let i = grouped.length - 1; i >= 0; i--) {
         if (grouped[i]!.result == null && grouped[i]!.start.toolName === ev.toolName) {
           grouped[i]!.result = ev;
@@ -104,35 +126,54 @@ export function ReasoningTrace() {
 
   if (traces.length === 0) {
     return (
-      <div className="font-mono text-xs text-muted-foreground">
+      <div className="font-mono text-[11px] text-tideline border-y border-rule bg-paper-deep px-4 py-3">
         Waiting for the first tool call…
       </div>
     );
   }
 
+  const doneCount = grouped.filter((g) => g.result != null).length;
+
   return (
-    <ol className="space-y-3 font-mono text-xs">
-      {grouped.map((g, i) => (
-        <li key={i}>
-          <div className="flex items-baseline gap-2">
-            {g.result == null && showActivePulse && i === grouped.length - 1 ? (
-              <span
-                aria-hidden
-                className="inline-block w-1.5 h-1.5 rounded-full bg-reservoir-500 animate-pulse"
-              />
-            ) : (
-              <span aria-hidden className="text-muted-foreground">
-                →
-              </span>
-            )}
-            <span className="text-foreground">
-              {g.start.toolName}
-              <span className="text-muted-foreground">({formatArgs(g.start.args)})</span>
-            </span>
-          </div>
-          {g.result ? <ResultBlock result={g.result} /> : null}
-        </li>
-      ))}
-    </ol>
+    <div className="border-y border-rule bg-paper-deep -mx-6 px-6 py-3">
+      <div className="flex items-center justify-between mb-3">
+        <span className="dryline-label">Reasoning trace</span>
+        <span className="font-mono text-[9.5px] tracking-[0.18em] text-tideline">
+          {doneCount}/{grouped.length}
+        </span>
+      </div>
+      <ol className="space-y-3">
+        {grouped.map((g, i) => {
+          const state = g.result
+            ? "done"
+            : status === "streaming" && i === grouped.length - 1
+            ? "running"
+            : "pending";
+          const friendlyLabel = TOOL_LABELS[g.start.toolName] ?? g.start.toolName;
+          return (
+            <li
+              key={i}
+              className={cn(
+                "grid gap-3",
+                "grid-cols-[14px_1fr]",
+                state === "pending" && "opacity-40",
+              )}
+            >
+              <StatusDot state={state} />
+              <div className="min-w-0">
+                <div className="font-serif text-[15px] text-ink leading-tight">
+                  {friendlyLabel}
+                </div>
+                <div className="font-mono text-[10.5px] text-tideline mt-0.5 truncate">
+                  <span className="text-aquifer">{g.start.toolName}</span>
+                  <span>({formatArgs(g.start.args)})</span>
+                </div>
+                {g.result ? <ResultBlock result={g.result} /> : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }

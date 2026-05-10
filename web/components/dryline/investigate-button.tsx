@@ -7,11 +7,14 @@ import { cn } from "@/lib/utils";
 
 interface InvestigateButtonProps {
   location: DemoLocationWithCoords;
-  /** Optional mode override; otherwise uses location.mode from the fixture. */
   mode?: Mode;
   className?: string;
 }
 
+/**
+ * Primary CTA. Square corners, ink-on-paper fill, mono uppercase tracking
+ * — matches the design's solid `.btn` primitive.
+ */
 export function InvestigateButton({ location, mode, className }: InvestigateButtonProps) {
   const { start, status, location: active } = useInvestigation();
   const isActive = active?.id === location.id;
@@ -22,15 +25,16 @@ export function InvestigateButton({ location, mode, className }: InvestigateButt
       disabled={isStreaming}
       onClick={() => start(location, mode)}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.18em]",
-        "border border-reservoir-300 bg-reservoir-50 text-reservoir-700",
-        "transition-colors hover:bg-reservoir-100 disabled:opacity-60 disabled:cursor-not-allowed",
+        "inline-flex items-center gap-2 px-3.5 py-2",
+        "bg-ink text-paper border border-ink",
+        "font-mono text-[10.5px] tracking-[0.18em] uppercase",
+        "transition-colors hover:bg-aquifer hover:border-aquifer disabled:opacity-60 disabled:cursor-not-allowed",
         className,
       )}
       aria-label={`Investigate ${location.label}`}
     >
       {isStreaming ? "Investigating…" : "Investigate"}
-      <span aria-hidden className="text-reservoir-700">→</span>
+      <span aria-hidden>→</span>
     </button>
   );
 }
@@ -41,34 +45,38 @@ interface ModeToggleProps {
   className?: string;
 }
 
-/** Two-state segmented control: Personal ↔ Transparency. */
+/**
+ * Two-state segmented control: Personal ↔ Transparency. Per the design's
+ * inline ModeToggle — square corners, ink-bordered, monospace caps.
+ */
 export function ModeToggle({ value, onChange, className }: ModeToggleProps) {
+  const opts: { k: Mode; label: string; q: string }[] = [
+    { k: "personal", label: "Personal", q: "Will the water last here?" },
+    { k: "transparency", label: "Transparency", q: "Who's drinking your aquifer?" },
+  ];
   return (
     <div
       role="radiogroup"
       aria-label="Investigation mode"
-      className={cn(
-        "inline-flex rounded-full border border-border bg-background p-0.5 text-[10px] uppercase tracking-[0.18em]",
-        className,
-      )}
+      className={cn("inline-flex border border-ink", className)}
     >
-      {(["personal", "transparency"] as const).map((m) => {
-        const active = value === m;
+      {opts.map((o, i) => {
+        const active = value === o.k;
         return (
           <button
-            key={m}
+            key={o.k}
             type="button"
             role="radio"
             aria-checked={active}
-            onClick={() => onChange(m)}
+            title={o.q}
+            onClick={() => onChange(o.k)}
             className={cn(
-              "px-2.5 py-1 rounded-full transition-colors",
-              active
-                ? "bg-reservoir-100 text-reservoir-700"
-                : "text-muted-foreground hover:text-foreground",
+              "px-3 py-1.5 font-mono text-[10px] tracking-[0.18em] uppercase transition-colors",
+              i > 0 ? "border-l border-ink" : "",
+              active ? "bg-ink text-paper" : "bg-transparent text-ink hover:bg-paper-deep",
             )}
           >
-            {m}
+            {o.label}
           </button>
         );
       })}

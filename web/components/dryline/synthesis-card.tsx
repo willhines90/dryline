@@ -4,32 +4,38 @@ import * as React from "react";
 import { useInvestigation } from "./investigation-provider";
 import { Markdown } from "@/lib/markdown";
 
+/**
+ * The cited synthesis card. Editorial layout per the design — small
+ * uppercase mono label, Newsreader serif body, sources footer with a
+ * dashed top border.
+ */
 export function SynthesisCard() {
   const { synthesis } = useInvestigation();
   if (!synthesis) return null;
 
   return (
-    <article className="rounded-lg border border-border bg-arid-50 px-5 py-4 shadow-sm">
-      <Markdown text={synthesis.markdown} />
+    <article className="border border-rule bg-card px-6 py-5 shadow-paper">
+      <div className="dryline-label mb-2">Synthesis</div>
+      <div className="dryline-body">
+        <Markdown text={synthesis.markdown} />
+      </div>
       {synthesis.sources.length > 0 ? (
-        <div className="mt-5 pt-3 border-t border-border/70">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1.5">
-            All sources
-          </div>
-          <ol className="text-xs space-y-1 list-decimal pl-5">
+        <div className="mt-5 pt-3 border-t border-dashed border-rule">
+          <div className="dryline-label mb-1.5">All sources</div>
+          <ol className="font-serif text-[13.5px] leading-snug list-decimal pl-5 space-y-0.5">
             {synthesis.sources.map((s, i) => (
               <li key={`${s.url}-${i}`}>
                 <a
                   href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-reservoir-700 underline decoration-reservoir-300 underline-offset-2 hover:bg-reservoir-50 rounded px-0.5"
+                  className="text-tide underline decoration-dotted underline-offset-2 hover:bg-foam"
                   title={`Retrieved ${s.retrievedAt.slice(0, 10)}`}
                 >
                   {s.title}
                 </a>
                 {s.publisher ? (
-                  <span className="text-muted-foreground"> — {s.publisher}</span>
+                  <span className="text-tideline"> — {s.publisher}</span>
                 ) : null}
               </li>
             ))}

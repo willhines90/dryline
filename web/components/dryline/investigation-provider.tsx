@@ -100,6 +100,7 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
             address: cleanAddress,
             mode: effectiveMode,
             headlineStory: location.headlineStory,
+            humanScaleHook: location.humanScaleHook,
           }),
           signal: ac.signal,
         });

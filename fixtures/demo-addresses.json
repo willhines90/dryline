@@ -11,6 +11,7 @@
       "mode": "personal",
       "live": true,
       "headlineStory": "Trinity Aquifer is dropping ~1.8 ft/yr; the Blanco River goes dry in summer. Will the water last here?",
+      "humanScaleHook": "The Trinity Aquifer beneath this address is dropping ~1.5 ft/year. Over 20 years that's ~30 ft of water column lost from your well's reach.",
       "drafts": ["watering-reminder", "well-outlook-briefing"],
       "approxLatLng": { "lat": 29.997, "lng": -98.099 }
     },
@@ -24,6 +25,7 @@
       "mode": "transparency",
       "live": true,
       "headlineStory": "A fab in a town of 16,000 draws several MGD from Lake Granger and the Trinity Aquifer. Who's drinking your aquifer?",
+      "humanScaleHook": "Samsung Austin Semiconductor's reported NPDES average flow at Taylor is roughly equivalent to the daily water use of 17,000 Texas households (USEPA WaterSense baseline ~110 gal/person/day, 2.5 persons/household). Lake Granger is currently at 67% of conservation capacity vs 78% historical for this date.",
       "drafts": ["public-comment", "industrial-water-onepager"],
       "approxLatLng": { "lat": 30.5712, "lng": -97.4087 }
     },
@@ -37,6 +39,7 @@
       "mode": "transparency",
       "live": true,
       "headlineStory": "Comanche Springs flowed for centuries until 1950s irrigation pumping dried them up. The Belding case cemented rule-of-capture. Live permit fight: Republic Water → El Paso.",
+      "humanScaleHook": "Comanche Springs flowed continuously for centuries until 1955, when irrigation pumping dried them up. The 1954 Pecos County WCID v. Williams decision cemented Texas's rule of capture — the legal framework that made the dry-up possible.",
       "drafts": ["gcd-letter", "historical-briefing"],
       "approxLatLng": { "lat": 30.8854, "lng": -102.8771 }
     },

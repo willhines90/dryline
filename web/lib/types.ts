@@ -45,6 +45,8 @@ export interface DemoLocation {
 export interface DemoLocationWithCoords extends DemoLocation {
   approxLatLng?: { lat: number; lng: number };
   live?: boolean;
+  /** Optional human-scale framing line for live-trio fixtures; required to land in the synthesis. */
+  humanScaleHook?: string;
 }
 
 // ---- Investigation flow (Phase 3) ----

@@ -94,7 +94,11 @@ const MODE_FRAMING: Record<Mode, string> = {
     "Mode: TRANSPARENCY. The user is asking about systemic patterns at or near this address — large permitted users, regulatory context, historical pressure on the watershed. Lead with a TENSION FLAG that pairs two facts (e.g., 'reservoir below historical average AND large permitted draw nearby'). Default artifact kind: public_comment when the data points to a specific permittee worth scrutinizing (cite the NPDES permit ID from get_big_users_nearby in the body — do not invent docket numbers; if no specific open comment window is known, include 'verify the comment window is open at echo.epa.gov/detailed-facility-report' in the draft); gcd_letter when groundwater stress + a named GCD is in scope; pia_request when the gap in public data is itself the story.",
 };
 
-const SYNTHESIS_INSTRUCTIONS = (mode: Mode, headlineStory: string | null) =>
+const SYNTHESIS_INSTRUCTIONS = (
+  mode: Mode,
+  headlineStory: string | null,
+  humanScaleHook: string | null,
+) =>
   `# Runtime instructions for this synthesis
 
 You are running inside the Dryline web app's investigation flow. ${MODE_FRAMING[mode]}
@@ -103,7 +107,11 @@ ${
   headlineStory
     ? `Background context the user came in with (treat as the framing, land it concretely in the data):\n> ${headlineStory}\n\n`
     : ""
-}The MVP tools (resolve_location, get_drought_status, get_reservoirs, get_drinking_water, get_big_users_nearby, and get_aquifer_status when the address is in a covered demo county) have ALREADY been run for this address; their full ToolResult shapes (data + caveats + sources) are provided below. Do not call any tools — only synthesize.
+}${
+    humanScaleHook
+      ? `**Required: weave the following human-scale framing into the synthesis.** The exact wording is yours — but the *number* and the *concrete comparison* MUST appear:\n> ${humanScaleHook}\n\n`
+      : ""
+  }The MVP tools (resolve_location, get_drought_status, get_reservoirs, get_drinking_water, get_big_users_nearby, and get_aquifer_status when the address is in a covered demo county) have ALREADY been run for this address; their full ToolResult shapes (data + caveats + sources) are provided below. Do not call any tools — only synthesize.
 
 Emit your final assistant text in EXACTLY this structure:
 
@@ -551,6 +559,7 @@ async function runInvestigation(
   address: string,
   mode: Mode,
   headlineStory: string | null,
+  humanScaleHook: string | null,
   writer: StreamWriter,
 ): Promise<InvestigationCompletion> {
   if (!process.env.OPENAI_API_KEY) {
@@ -630,7 +639,7 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
   const input: ResponseInput = [
     {
       role: "system",
-      content: `${skill}\n\n---\n\n${SYNTHESIS_INSTRUCTIONS(mode, headlineStory)}`,
+      content: `${skill}\n\n---\n\n${SYNTHESIS_INSTRUCTIONS(mode, headlineStory, humanScaleHook)}`,
     },
     { role: "user", content: userMessage },
   ];
@@ -723,16 +732,18 @@ export async function POST(req: Request): Promise<Response> {
   let address: string;
   let mode: Mode = "personal";
   let headlineStory: string | null = null;
+  let humanScaleHook: string | null = null;
   try {
     const body = (await req.json()) as {
       address?: unknown;
       mode?: unknown;
       headlineStory?: unknown;
+      humanScaleHook?: unknown;
     };
     if (typeof body.address !== "string" || body.address.trim().length === 0) {
       return new Response(
         JSON.stringify({
-          error: "Body must be { address: string, mode?: 'personal'|'transparency', headlineStory?: string }",
+          error: "Body must be { address: string, mode?: 'personal'|'transparency', headlineStory?: string, humanScaleHook?: string }",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
@@ -743,6 +754,9 @@ export async function POST(req: Request): Promise<Response> {
     }
     if (typeof body.headlineStory === "string" && body.headlineStory.trim().length > 0) {
       headlineStory = body.headlineStory.trim();
+    }
+    if (typeof body.humanScaleHook === "string" && body.humanScaleHook.trim().length > 0) {
+      humanScaleHook = body.humanScaleHook.trim();
     }
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
@@ -779,7 +793,7 @@ export async function POST(req: Request): Promise<Response> {
       try {
         const completion = useAgentic
           ? await runAgentic(address, mode, headlineStory, writer)
-          : await runInvestigation(address, mode, headlineStory, writer);
+          : await runInvestigation(address, mode, headlineStory, humanScaleHook, writer);
         okToCache = completion.cacheable;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

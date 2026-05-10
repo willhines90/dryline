@@ -29,7 +29,14 @@
  */
 
 import OpenAI from "openai";
-import type { ResponseInput, ResponseStreamEvent } from "openai/resources/responses/responses";
+import type {
+  ResponseFunctionToolCall,
+  ResponseInput,
+  ResponseInputItem,
+  ResponseStreamEvent,
+  Tool,
+} from "openai/resources/responses/responses";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { tools as drylineTools } from "@dryline/mcp/tools";
@@ -41,6 +48,17 @@ export const dynamic = "force-dynamic";
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4.1";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SYNTHESIS_TIMEOUT_MS = 60_000;
+const AGENTIC_TIMEOUT_MS = 50_000;
+const AGENTIC_MAX_ITERATIONS = 8;
+
+const PUBLISHED_TOOL_NAMES = new Set([
+  "resolve_location",
+  "get_drought_status",
+  "get_reservoirs",
+  "get_drinking_water",
+  "get_big_users_nearby",
+  "get_aquifer_status",
+]);
 
 interface CacheEntry {
   buffer: Uint8Array;
@@ -299,6 +317,236 @@ interface InvestigationCompletion {
   cacheable: boolean;
 }
 
+const AGENT_INSTRUCTIONS = (mode: Mode, headlineStory: string | null) =>
+  `# Runtime instructions for this investigation
+
+You are running inside the Dryline web app's investigation flow with full tool-calling agency. ${MODE_FRAMING[mode]}
+
+${
+  headlineStory
+    ? `Background context the user came in with (treat as the framing, land it concretely in the data):\n> ${headlineStory}\n\n`
+    : ""
+}You have access to six water-data tools. ALWAYS call resolve_location first to get lat/lng + countyFips for downstream tools. Then choose tools based on what the address and the framing call for; you do not have to call all of them. Aim to finish in 6 or fewer tool calls.
+
+When you have enough data, emit your final assistant text in EXACTLY this structure:
+
+\`\`\`
+# Synthesis
+
+<2–4 short paragraphs, ~120–280 words total. Every fact-bearing sentence cites a source from a tool's sources[] using inline markdown links [Source Title](url). End with the required Dryline disclaimer paragraph.>
+
+---
+# Action artifact
+KIND: <one of: public_comment | watering_reminder | gcd_letter | well_outlook_briefing | pia_request | weekly_briefing>
+TITLE: <short title, no markdown>
+BODY:
+<the drafted artifact, markdown allowed, ~120–250 words. Include "Review before sending." at the top if the artifact is intended for a third party.>
+\`\`\`
+
+Hard rules — every one is non-negotiable:
+1. Never claim causation. Tensions are flags, not causal claims.
+2. Never predict personal impact. Do NOT use "your well may run dry," "your water could become unsafe," or any probabilistic-future-tense phrasing. State the data.
+3. Avoid hedging language ("could be," "might affect"). Uncertainty belongs in caveats, not in fuzzy synthesis prose.
+4. For public_comment artifacts, cite the actual NPDES permit ID(s) from get_big_users_nearby. Do not invent TCEQ docket numbers.
+5. If a tool returns data: null or an error caveat, say so explicitly in the synthesis and continue with what you do have.
+6. Cite at least three distinct sources inline.`;
+
+function buildOpenAITools(): Tool[] {
+  return drylineTools
+    .filter((t) => PUBLISHED_TOOL_NAMES.has(t.name))
+    .map((t) => {
+      const parameters = zodToJsonSchema(t.inputSchema, {
+        $refStrategy: "none",
+        target: "openApi3",
+      }) as Record<string, unknown>;
+      delete parameters.$schema;
+      delete parameters.definitions;
+      return {
+        type: "function",
+        name: t.name,
+        description: t.description,
+        parameters,
+        strict: false,
+      } as Tool;
+    });
+}
+
+async function runAgentic(
+  address: string,
+  mode: Mode,
+  headlineStory: string | null,
+  writer: StreamWriter,
+): Promise<InvestigationCompletion> {
+  if (!process.env.OPENAI_API_KEY) {
+    writer.emit("error", { message: "OPENAI_API_KEY not set on the server. Add it to web/.env.local." });
+    writer.emit("done", {});
+    writer.close();
+    return { cacheable: false };
+  }
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const skill = await getSkillPrompt();
+  const tools = buildOpenAITools();
+
+  let inputItems: ResponseInput = [
+    {
+      role: "system",
+      content: `${skill}\n\n---\n\n${AGENT_INSTRUCTIONS(mode, headlineStory)}`,
+    },
+    {
+      role: "user",
+      content: `Investigate the water situation at this Texas address: ${address}`,
+    },
+  ];
+
+  const collected: ToolResult<unknown>[] = [];
+  const ac = new AbortController();
+  const timeoutId = setTimeout(() => ac.abort(), AGENTIC_TIMEOUT_MS);
+  let timedOut = false;
+  let finalText = "";
+
+  try {
+    iterations: for (let iter = 0; iter < AGENTIC_MAX_ITERATIONS; iter++) {
+      const stream = (await client.responses.create(
+        { model: MODEL, input: inputItems, tools, stream: true, parallel_tool_calls: true },
+        { signal: ac.signal },
+      )) as unknown as AsyncIterable<ResponseStreamEvent>;
+
+      const pendingCalls = new Map<string, { name: string; argsBuffer: string; emittedStart: boolean }>();
+      const newItems: ResponseInputItem[] = [];
+      const completedCalls: ResponseFunctionToolCall[] = [];
+      let textForThisIter = "";
+
+      for await (const event of stream) {
+        switch (event.type) {
+          case "response.output_item.added": {
+            if (event.item.type === "function_call") {
+              pendingCalls.set(event.item.id ?? event.item.call_id, {
+                name: event.item.name,
+                argsBuffer: "",
+                emittedStart: false,
+              });
+            }
+            break;
+          }
+          case "response.function_call_arguments.delta": {
+            const c = pendingCalls.get(event.item_id);
+            if (c) c.argsBuffer += event.delta;
+            break;
+          }
+          case "response.function_call_arguments.done": {
+            const c = pendingCalls.get(event.item_id);
+            if (c && !c.emittedStart) {
+              let args: unknown = {};
+              try {
+                args = c.argsBuffer ? JSON.parse(c.argsBuffer) : {};
+              } catch {
+                args = c.argsBuffer;
+              }
+              writer.emit("tool_start", { toolName: c.name, args });
+              c.emittedStart = true;
+              c.argsBuffer = event.arguments;
+            }
+            break;
+          }
+          case "response.output_item.done": {
+            if (event.item.type === "function_call") {
+              completedCalls.push(event.item);
+              newItems.push(event.item);
+            } else if (event.item.type === "message") {
+              newItems.push(event.item);
+            }
+            break;
+          }
+          case "response.output_text.delta":
+            textForThisIter += event.delta;
+            break;
+          case "error": {
+            const message = (event as unknown as { error?: { message?: string }; message?: string })
+              .error?.message ?? (event as unknown as { message?: string }).message ?? "OpenAI stream error";
+            writer.emit("error", { message });
+            break;
+          }
+          default:
+            break;
+        }
+      }
+
+      if (completedCalls.length === 0) {
+        finalText = textForThisIter || finalText;
+        break iterations;
+      }
+
+      const dispatched = await Promise.all(
+        completedCalls.map(async (call) => {
+          let args: unknown = {};
+          try {
+            args = call.arguments ? JSON.parse(call.arguments) : {};
+          } catch {
+            args = {};
+          }
+          const result = await dispatchTool(call.name, args);
+          collected.push(result.toolResult);
+          writer.emit("tool_result", {
+            toolName: call.name,
+            summary: result.summary,
+            data: result.toolResult.data,
+            sources: result.toolResult.sources,
+            caveats: result.toolResult.caveats,
+          });
+          return { call, result };
+        }),
+      );
+
+      for (const { call, result } of dispatched) {
+        newItems.push({
+          type: "function_call_output",
+          call_id: call.call_id,
+          output: JSON.stringify(result.toolResult),
+        });
+      }
+
+      inputItems = [...inputItems, ...newItems];
+    }
+  } catch (err) {
+    if (ac.signal.aborted) {
+      timedOut = true;
+    } else {
+      clearTimeout(timeoutId);
+      const message = err instanceof Error ? err.message : String(err);
+      writer.emit("error", { message: `Agentic loop error: ${message}` });
+      writer.emit("done", {});
+      writer.close();
+      return { cacheable: false };
+    }
+  }
+  clearTimeout(timeoutId);
+
+  if (timedOut) {
+    writer.emit("error", {
+      message: `Agentic loop exceeded ${AGENTIC_TIMEOUT_MS / 1000}s. Drop the ?agent=1 flag to use the deterministic path.`,
+    });
+    writer.emit("done", {});
+    writer.close();
+    return { cacheable: false };
+  }
+
+  if (!finalText) {
+    writer.emit("error", { message: "Agent produced no synthesis text." });
+    writer.emit("done", {});
+    writer.close();
+    return { cacheable: false };
+  }
+
+  const { synthesis, artifact } = parseFinalText(finalText);
+  const sourcesUnion = collectSourcesFromToolResults(collected);
+  writer.emit("synthesis", { markdown: synthesis, sources: sourcesUnion });
+  if (artifact) writer.emit("artifact", artifact);
+  writer.emit("done", {});
+  writer.close();
+  return { cacheable: true };
+}
+
 async function runInvestigation(
   address: string,
   mode: Mode,
@@ -503,7 +751,9 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const cacheKey = `${mode}::${address.toLowerCase()}`;
+  const url = new URL(req.url);
+  const useAgentic = url.searchParams.get("agent") === "1";
+  const cacheKey = `${useAgentic ? "agent" : "det"}::${mode}::${address.toLowerCase()}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && cached.expires > now) {
@@ -527,7 +777,9 @@ export async function POST(req: Request): Promise<Response> {
       const writer = new StreamWriter(controller);
       let okToCache = true;
       try {
-        const completion = await runInvestigation(address, mode, headlineStory, writer);
+        const completion = useAgentic
+          ? await runAgentic(address, mode, headlineStory, writer)
+          : await runInvestigation(address, mode, headlineStory, writer);
         okToCache = completion.cacheable;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

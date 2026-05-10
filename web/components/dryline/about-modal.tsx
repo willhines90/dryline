@@ -2,14 +2,45 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { Acronym } from "./acronym";
 
 const SOURCES = [
-  { abbr: "TWDB",        full: "TX Water Development Board",     domain: "waterdatafortexas.org",      use: "Reservoir levels + groundwater wells" },
-  { abbr: "USDM",        full: "U.S. Drought Monitor",           domain: "usdmdataservices.unl.edu",    use: "County drought category, weekly" },
-  { abbr: "EPA SDWIS",   full: "EPA Safe Drinking Water Info",   domain: "echodata.epa.gov",            use: "Drinking-water compliance via ECHO" },
-  { abbr: "EPA ECHO",    full: "EPA Enforcement & Compliance",   domain: "echodata.epa.gov",            use: "Federally-reportable NPDES dischargers" },
-  { abbr: "USGS NWIS",   full: "USGS National Water Info",       domain: "waterservices.usgs.gov",      use: "Stream gauges (planned)" },
-  { abbr: "Census",      full: "U.S. Census Bureau",             domain: "geocoding.geo.census.gov",    use: "County FIPS resolution" },
+  {
+    abbr: "TWDB",
+    full: "Texas Water Development Board",
+    domain: "waterdatafortexas.org",
+    use: "Reservoir levels (37 instrumented majors) + the TWDB Groundwater Database (water-level history at every monitoring well in the state).",
+  },
+  {
+    abbr: "USDM",
+    full: "U.S. Drought Monitor",
+    domain: "usdmdataservices.unl.edu",
+    use: "Weekly drought category by county — None, D0 (abnormal), D1 (moderate), D2 (severe), D3 (extreme), D4 (exceptional).",
+  },
+  {
+    abbr: "USGS",
+    full: "U.S. Geological Survey · NWIS",
+    domain: "waterservices.usgs.gov",
+    use: "Live stream-gauge discharge (cubic feet per second), updated every ~15 minutes per gauge.",
+  },
+  {
+    abbr: "EPA SDWIS",
+    full: "EPA Safe Drinking Water Information System",
+    domain: "echodata.epa.gov",
+    use: "The public water system that serves your address + its current Safe Drinking Water Act compliance (health-based vs procedural violations).",
+  },
+  {
+    abbr: "EPA ECHO CWA",
+    full: "EPA Clean Water Act facilities",
+    domain: "echodata.epa.gov",
+    use: "Federally-reportable NPDES dischargers within radius — both individual permits (with reported flow) and general permits (construction, MSGP).",
+  },
+  {
+    abbr: "Census",
+    full: "U.S. Census Bureau · Geocoder",
+    domain: "geocoding.geo.census.gov",
+    use: "County FIPS code resolution. Used as a fallback when Nominatim doesn't resolve the address cleanly.",
+  },
 ];
 
 interface AboutModalProps {
@@ -54,6 +85,9 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
             >
               Dryline
             </h2>
+            <p className="font-serif italic text-[14px] text-tideline mt-1">
+              Investigate Texas water at any address.
+            </p>
           </div>
           <button
             type="button"
@@ -66,19 +100,34 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
         </header>
 
         <div className="px-6 py-5 space-y-5">
-          <p className="font-serif text-[16px] leading-relaxed text-ink/90">
-            Texas water is opaque to the people who depend on it. The data is real, public,
-            and federally cited — but it&apos;s spread across eight agencies, ten reporting
-            cadences, and a small library of state-only forms with no APIs.{" "}
-            <strong className="font-semibold">Dryline collapses that distance.</strong>{" "}
-            Type any Texas address. An agent fans out across drought, reservoirs,
-            drinking water, aquifer monitoring, and federally-reportable industrial
-            dischargers, returning each tool&apos;s result with inline citations and structured
-            caveats. A single 0–100{" "}
-            <em className="italic">Dryline Score</em> sits at the top; the cited synthesis
-            below explains the why; a drafted civic-action artifact slides in from the
-            right edge.
+          <p className="font-serif text-[17px] leading-relaxed text-ink">
+            <strong className="font-semibold">Texas added 4 million people in five years. Our water didn&apos;t keep up.</strong>{" "}
+            The data is real, public, and federally published — but it&apos;s spread across a stack
+            of state and federal agencies, each with a different update cadence, access pattern,
+            and freshness profile. By the time a homeowner finds out their groundwater table dropped
+            twelve feet last decade, or that a new fab three miles upstream just got a discharge
+            permit, the comment window has closed.
           </p>
+
+          <p className="font-serif text-[15.5px] leading-relaxed text-ink/85">
+            Type any Texas address. An autonomous flow fans out across drought, reservoirs,
+            drinking water, aquifer monitoring, federally-reportable industrial dischargers,
+            stream gauges, and active permits. Every fact-bearing sentence cites a public
+            source. Every result carries structured caveats explaining what the data does NOT
+            say. A single 0–100 <em className="italic">Dryline Score</em> sits at the top of
+            the synthesis card; a drafted civic-action artifact slides in from the right edge.
+          </p>
+
+          <div>
+            <div className="dryline-label mb-2">How to read this surface</div>
+            <ul className="grid grid-cols-1 gap-1.5 text-[13.5px] font-serif text-ink/85 leading-snug">
+              <li><strong className="font-semibold">The map</strong> shows the current US Drought Monitor polygon under everything, the 18 major TWDB-instrumented reservoirs as tide-blue dots, and the seven demo addresses colored by mode.</li>
+              <li><strong className="font-semibold">Click any pin or any demo card</strong> to start an investigation. The map flies to the address and a 15-mile industrial-search radius drops as a translucent disk.</li>
+              <li><strong className="font-semibold">The reasoning trace</strong> on the right streams every tool call as it lands. Citation chips link to the actual public source URL with a retrieval timestamp.</li>
+              <li><strong className="font-semibold">The Dryline Score</strong> is reductive on purpose. Hover &ldquo;Why this number?&rdquo; for the per-subscore rationale.</li>
+              <li><strong className="font-semibold">The drafted artifact</strong> (public comment, GCD letter, watering reminder, etc.) appears on the right-edge slide-in. There&apos;s no auto-submit. Review before sending.</li>
+            </ul>
+          </div>
 
           <div>
             <div className="dryline-label mb-2">Two presentations · same investigation</div>
@@ -87,11 +136,11 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
                 <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-aquifer">
                   Personal
                 </div>
-                <div className="font-serif italic mt-1 text-ink">Will the water last here?</div>{/* */}
+                <div className="font-serif italic mt-1 text-ink">Will the water last here?</div>
                 <div className="text-tideline mt-2 leading-snug">
-                  Lived experience: well owners, utility customers, families. Leads with
-                  the local aquifer trend. Default artifact: watering reminder or well
-                  outlook briefing.
+                  Lived experience: well owners, utility customers, families. Leads with the
+                  local aquifer trend at the nearest TWDB monitoring well. Default artifact:
+                  watering reminder or well outlook briefing.
                 </div>
               </div>
               <div className="border border-rule bg-card p-3">
@@ -102,9 +151,9 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
                   Who&apos;s drinking your aquifer?
                 </div>
                 <div className="text-tideline mt-2 leading-snug">
-                  Systemic: journalists, civic researchers, residents tracking nearby
-                  industry. Leads with a tension flag. Default artifact: public comment,
-                  GCD letter, or PIA request.
+                  Systemic: journalists, civic researchers, residents tracking nearby industry.
+                  Leads with a tension flag pairing two facts. Default artifact: public comment,{" "}
+                  <Acronym>GCD</Acronym> letter, or <Acronym>PIA</Acronym> request.
                 </div>
               </div>
             </div>
@@ -131,15 +180,27 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           <div>
             <div className="dryline-label mb-2">Why this works</div>
             <p className="font-serif text-[15px] leading-relaxed text-ink/85">
-              Six bounded MCP tools, each returning <code className="font-mono text-[12.5px] bg-paper-deep px-1">{"{ data, caveats[], sources[] }"}</code>.
+              Eight bounded <Acronym>MCP</Acronym> tools, each returning <code className="font-mono text-[12.5px] bg-paper-deep px-1">{"{ data, caveats[], sources[] }"}</code>.
               Every claim cites a public URL with a retrievedAt timestamp. The synthesis is
-              mode-aware. Civic-action artifacts (public comments, GCD letters, PIA
-              requests) include real NPDES IDs — no invented docket numbers — and a{" "}
-              <em>Review before sending</em> notice. No auto-submit.
+              mode-aware. Civic-action artifacts (public comments, <Acronym>GCD</Acronym> letters, <Acronym>PIA</Acronym>{" "}
+              requests) include real <Acronym>NPDES</Acronym> permit IDs — no invented docket
+              numbers — and a <em>Review before sending</em> notice. No auto-submit.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-1 border-t border-dashed border-rule mt-2">
+          <div>
+            <div className="dryline-label mb-2">Acronyms you might see</div>
+            <div className="text-[12.5px] text-tideline leading-snug">
+              Hover any underlined abbreviation in the app — <Acronym>TWDB</Acronym>,{" "}
+              <Acronym>NPDES</Acronym>, <Acronym>SDWIS</Acronym>, <Acronym>GCD</Acronym>,{" "}
+              <Acronym>HUC</Acronym>, <Acronym>FIPS</Acronym>, <Acronym>MGD</Acronym>,{" "}
+              <Acronym>CFS</Acronym>, <Acronym>MCL</Acronym> — to see what it stands for.
+              The <a href="https://github.com/willhines90/dryline#acronyms" className="text-aquifer underline decoration-dotted underline-offset-2">README&apos;s acronym table</a>{" "}
+              has every term in one place.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-3 border-t border-dashed border-rule">
             <ExternalLink href="https://github.com/willhines90/dryline">→ GitHub</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/PROPOSAL.md">→ Proposal</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/SUBMISSION.md">→ Submission</ExternalLink>

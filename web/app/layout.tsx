@@ -27,10 +27,53 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+const SITE_URL = "https://github.com/willhines90/dryline";
+const TITLE = "Dryline — Investigate Texas water at any address";
+const DESCRIPTION =
+  "Texas added 4 million people in five years. Our water didn't keep up. Type any Texas address and Dryline streams a cited investigation across drought, reservoirs, drinking water, aquifer monitoring, and federally-reportable industrial dischargers — every claim sourced, structured caveats, drafted civic action.";
+
 export const metadata: Metadata = {
-  title: "Dryline — Investigate Texas water at any address",
-  description:
-    "Environmental intelligence for a thirsty state. Drought, reservoirs, drinking water, aquifer health, and large permitted users — all from public Texas data, with citations.",
+  title: {
+    default: TITLE,
+    template: "%s · Dryline",
+  },
+  description: DESCRIPTION,
+  applicationName: "Dryline",
+  authors: [{ name: "Will Hines", url: "https://github.com/willhines90" }],
+  keywords: [
+    "Texas water",
+    "TWDB",
+    "EPA SDWIS",
+    "EPA ECHO",
+    "USGS NWIS",
+    "U.S. Drought Monitor",
+    "Trinity Aquifer",
+    "Edwards Aquifer",
+    "Ogallala",
+    "MCP server",
+    "agent skill",
+    "OpenAI Responses API",
+    "Texas water rights",
+    "NPDES",
+    "GCD",
+    "civic technology",
+    "open data",
+    "AITX hackathon",
+  ],
+  openGraph: {
+    type: "website",
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "Dryline",
+    url: SITE_URL,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  category: "civic technology",
 };
 
 export default function RootLayout({

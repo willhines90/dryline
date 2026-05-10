@@ -152,6 +152,47 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
     [onPick],
   );
 
+  /**
+   * Free-text fallback: turn whatever the user typed into a Candidate that
+   * the orchestrator can hand to /api/investigate. resolve_location does
+   * the real geocoding server-side; we just need plausible city/county
+   * tokens here.
+   *
+   * Heuristics:
+   *  - "City, County, TX"  → city = first, county = second
+   *  - "City, TX 78676"     → city = first; county empty (resolve_location handles)
+   *  - "City, TX"           → city = first; county empty
+   *  - bare city            → use as both city and county (Nominatim usually
+   *                           handles, falls through to TX-FIPS map)
+   */
+  const commitFreeText = React.useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (text.length < 3) return;
+      const parts = text.split(",").map((p) => p.trim()).filter(Boolean);
+      const city = parts[0] ?? text;
+      const second = parts[1] ?? "";
+      // If second token looks like just a state abbreviation, drop it.
+      const county = /^[A-Z]{2}$/.test(second) || /^[A-Z]{2}\s/.test(second) ? "" : second.replace(/county$/i, "").trim();
+      const fc: DemoLocationWithCoords = {
+        id: `freetext:${text.toLowerCase()}`,
+        label: text,
+        city,
+        county: county || city, // best guess; resolve_location will override
+        region: "Free-text search",
+        mode: "personal",
+        headlineStory: `Live investigation for ${text}. No curated narrative.`,
+        approxLatLng: undefined,
+        live: false,
+      };
+      onPick(fc);
+      setOpen(false);
+      setQ("");
+      inputRef.current?.blur();
+    },
+    [onPick],
+  );
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -161,7 +202,14 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
       setHl((h) => Math.max(h - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      commit(candidates[hl]);
+      // Prefer a highlighted candidate; fall back to firing the free-text query.
+      if (candidates.length > 0 && q.trim()) {
+        commit(candidates[hl]);
+      } else if (q.trim()) {
+        commitFreeText(q);
+      } else if (candidates.length > 0) {
+        commit(candidates[hl]);
+      }
     } else if (e.key === "Escape") {
       setOpen(false);
       inputRef.current?.blur();
@@ -199,11 +247,31 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
 
       {open && candidates.length === 0 && q.trim() ? (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-50">
-          <div className="px-3 py-3 font-serif italic text-[13px] text-tideline">
-            No staged or known address matches <span className="font-mono not-italic text-ink">&ldquo;{q.trim()}&rdquo;</span>.
+          <div className="px-3 py-2.5 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
+            No staged match · run live
           </div>
-          <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-t border-rule">
-            Try a city + county, e.g. <span className="text-ink">Wimberley, Hays</span>.
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              commitFreeText(q);
+            }}
+            className="block w-full text-left px-3 py-2.5 hover:bg-paper-deep cursor-pointer"
+          >
+            <div className="flex justify-between items-baseline gap-2">
+              <span className="font-serif text-[14.5px] font-medium text-ink">
+                Investigate &ldquo;{q.trim()}&rdquo; live
+              </span>
+              <span className="font-mono text-[8.5px] tracking-[0.16em] text-aquifer border border-aquifer/60 px-1.5 py-px">
+                LIVE ↗
+              </span>
+            </div>
+            <div className="text-[11.5px] text-tideline mt-0.5">
+              Resolve via Nominatim + Census; run all 8 tools against real public APIs.
+            </div>
+          </button>
+          <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.16em] text-tideline border-t border-rule">
+            ↵ run live · esc close
           </div>
         </div>
       ) : null}

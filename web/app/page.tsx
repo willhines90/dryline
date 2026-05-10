@@ -1,14 +1,13 @@
 /**
  * Dryline — landing / investigation surface.
  *
- * Layout: top bar (logo + lede + search + global mode + compare toggle),
- * 62/38 split (map left, panel right), status footer pinned bottom.
+ * Strict viewport-locked layout: header + (map | panel) + footer = exactly
+ * 100vh. Page never scrolls; the right panel handles its own internal
+ * scroll. Map stays visible at all times.
  *
- * Compare-mode (Phase 4.6 §3): when on, the right panel splits into two
- * stacked InvestigationPanel instances — primary on top, secondary
- * underneath, with a ComparisonHero strip above both once both finish.
- * Each demo card's Investigate button decides where to drop the new
- * investigation based on which slot is empty.
+ * Compare-mode: the right panel splits into two stacked InvestigationPanel
+ * instances — primary on top, secondary below, ComparisonHero strip
+ * above both once both scores arrive.
  */
 
 "use client";
@@ -34,8 +33,11 @@ import { SearchBar } from "@/components/dryline/search-bar";
 import { StatusFooter } from "@/components/dryline/status-footer";
 import { CompareToggle } from "@/components/dryline/compare-toggle";
 import { ComparisonHero } from "@/components/dryline/comparison-hero";
+import { AboutModal } from "@/components/dryline/about-modal";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const GITHUB_URL = "https://github.com/willhines90/dryline";
 
 export default function HomePage() {
   const locations = (demoAddresses.locations as DemoLocationWithCoords[]).filter(
@@ -51,9 +53,12 @@ export default function HomePage() {
 function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
   const { primary, secondary, compareMode, startNextAvailable } = useMultiInvestigation();
   const focused = primary.location ?? secondary.location ?? null;
+  const investigationActive =
+    primary.status === "streaming" || secondary.status === "streaming";
   const [globalMode, setGlobalMode] = React.useState<Mode>("personal");
+  const [aboutOpen, setAboutOpen] = React.useState(false);
 
-  const handleSearchPick = React.useCallback(
+  const handlePick = React.useCallback(
     (loc: DemoLocationWithCoords) => startNextAvailable(loc, loc.mode ?? globalMode),
     [startNextAvailable, globalMode],
   );
@@ -61,37 +66,60 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
   const anyActive = primary.location || secondary.location;
 
   return (
-    <main className="min-h-screen flex flex-col overflow-x-hidden bg-background">
-      <header className="sticky top-0 z-30 border-b border-rule bg-background/90 backdrop-blur-sm">
-        <div className="px-6 py-3 flex items-center justify-between gap-6">
-          <div className="flex items-baseline gap-4 min-w-0">
-            <Link href="/" className="flex items-center gap-2 no-underline group">
+    <main className="h-screen flex flex-col overflow-hidden bg-background">
+      <header className="shrink-0 border-b border-rule bg-background/90 backdrop-blur-sm">
+        <div className="px-5 py-2.5 flex items-center justify-between gap-4">
+          <div className="flex items-baseline gap-3 min-w-0">
+            <Link href="/" className="flex items-center gap-2 no-underline">
               <DrylineLogo size={20} />
-              <span className="font-serif text-[22px] font-semibold tracking-[-0.012em] text-ink">
+              <span className="font-serif text-[20px] font-semibold tracking-[-0.012em] text-ink">
                 Dryline
               </span>
             </Link>
-            <span className="hidden md:inline font-serif italic text-[14px] text-tideline truncate">
+            <span className="hidden lg:inline font-serif italic text-[13px] text-tideline truncate">
               Investigate Texas water at any address.
             </span>
           </div>
           <div className="flex items-center gap-2">
             <SearchBar
               staged={locations}
-              onPick={handleSearchPick}
+              onPick={handlePick}
               activeLabel={primary.location?.label ?? null}
             />
             <ModeToggle value={globalMode} onChange={setGlobalMode} />
             <CompareToggle />
+            <button
+              type="button"
+              onClick={() => setAboutOpen(true)}
+              className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors"
+            >
+              About
+            </button>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors"
+              title="View source on GitHub"
+            >
+              GitHub ↗
+            </a>
           </div>
         </div>
       </header>
 
       <section className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 min-h-0">
-        <div className="lg:col-span-8 min-w-0 border-b border-rule lg:border-b-0 relative">
-          <TexasMap locations={locations} focusedLocation={focused} />
+        <div className="lg:col-span-8 min-w-0 min-h-0 border-b border-rule lg:border-b-0 relative">
+          <TexasMap
+            locations={locations}
+            focusedLocation={focused}
+            investigationActive={investigationActive}
+            onLocationClick={(loc) =>
+              handlePick(loc as DemoLocationWithCoords)
+            }
+          />
         </div>
-        <aside className="lg:col-span-4 min-w-0 border-l-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
+        <aside className="lg:col-span-4 min-w-0 min-h-0 border-l-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
           {!anyActive ? (
             <DemoAddressList locations={locations} globalMode={globalMode} />
           ) : (
@@ -102,17 +130,12 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
 
       <StatusFooter />
 
-      {/* Slide-in artifact panel; reads from PRIMARY only (single artifact at a time). */}
       <ActionsTab />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </main>
   );
 }
 
-/**
- * Renders the right-side panel. In single-mode: just the primary
- * InvestigationPanel. In compare-mode: ComparisonHero + primary panel +
- * secondary slot (panel or "pick a second" prompt).
- */
 function CompareOrSinglePanels() {
   const { compareMode, primary, secondary } = useMultiInvestigation();
 
@@ -127,11 +150,10 @@ function CompareOrSinglePanels() {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
       {primary.score && secondary.score ? (
-        <div className="px-6 pt-5">
+        <div className="px-5 pt-4">
           <ComparisonHero />
         </div>
       ) : null}
-
       <div className="divide-y divide-rule">
         <SlotCtx.Provider value="primary">
           <CompareSlotPanel slot="primary" />
@@ -146,17 +168,15 @@ function CompareOrSinglePanels() {
 
 function CompareSlotPanel({ slot }: { slot: Slot }) {
   const slotApi = useInvestigation();
-  if (!slotApi.location) {
-    return <SlotPlaceholder slot={slot} />;
-  }
+  if (!slotApi.location) return <SlotPlaceholder slot={slot} />;
   return <InvestigationPanel compact slotLabel={slot} />;
 }
 
 function SlotPlaceholder({ slot }: { slot: Slot }) {
   return (
-    <div className="px-6 py-6">
+    <div className="px-5 py-5">
       <div className="dryline-label">{slot === "primary" ? "Primary" : "Secondary"}</div>
-      <p className="font-serif italic text-tideline text-[14px] mt-2">
+      <p className="font-serif italic text-tideline text-[13.5px] mt-2">
         {slot === "secondary"
           ? "Pick a second address from the map or search to compare."
           : "Pick a primary address to start the comparison."}
@@ -184,57 +204,57 @@ function DemoAddressList({
     : null;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
+    <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
       <div>
         <div className="dryline-label">Demo addresses</div>
-        <h2 className="font-serif text-[26px] leading-tight tracking-[-0.008em] mt-1">
+        <h2 className="font-serif text-[22px] leading-tight tracking-[-0.008em] mt-0.5">
           {compareMode ? "Pick two addresses to compare." : "Pick an address to investigate."}
         </h2>
-        <p className="font-serif italic text-tideline text-[15px] mt-2">
+        <p className="font-serif italic text-tideline text-[13.5px] mt-1.5 leading-snug">
           {compareMode
-            ? "Two parallel investigations, scored side by side. The contrast is the demo moment."
-            : "Pre-staged for the live demo. Investigation streams in real time — every claim cites a public source."}
+            ? "Two parallel investigations, scored side by side. The contrast is the demo."
+            : "Pre-staged for the live demo. Every claim cites a public source."}
         </p>
       </div>
 
-      <ul className="space-y-3">
+      <ul className="space-y-2.5">
         {locations.map((loc) => {
           const currentMode = modeByLoc[loc.id] ?? loc.mode ?? globalMode;
           return (
             <li
               key={loc.id}
-              className="border border-rule bg-card p-4 transition-colors hover:border-ink/30"
+              className="border border-rule bg-card px-3.5 py-3 transition-colors hover:border-ink/30"
             >
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="dryline-label">{loc.region}</div>
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="dryline-label truncate">{loc.region}</div>
                 {loc.live ? (
-                  <span className="font-mono text-[8.5px] tracking-[0.18em] text-ink border border-ink px-1.5 py-px">
+                  <span className="font-mono text-[8.5px] tracking-[0.18em] text-ink border border-ink px-1.5 py-px shrink-0">
                     LIVE
                   </span>
                 ) : (
-                  <span className="font-mono text-[8.5px] tracking-[0.18em] text-tideline border border-rule px-1.5 py-px">
+                  <span className="font-mono text-[8.5px] tracking-[0.18em] text-tideline border border-rule px-1.5 py-px shrink-0">
                     CHAMBER
                   </span>
                 )}
               </div>
 
-              <div className="font-serif text-[19px] leading-tight tracking-[-0.008em] mt-1.5 text-ink">
+              <div className="font-serif text-[16px] leading-tight tracking-[-0.008em] mt-1 text-ink">
                 {loc.label}
               </div>
 
-              <p className="font-serif italic text-[13.5px] text-tideline mt-2 leading-snug">
+              <p className="font-serif italic text-[12.5px] text-tideline mt-1.5 leading-snug">
                 {loc.headlineStory}
               </p>
 
-              <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
                 {compareMode ? (
                   <button
                     type="button"
                     onClick={() => startNextAvailable(loc, currentMode)}
                     disabled={nextSlotHint === null}
                     className={cn(
-                      "inline-flex items-center gap-2 px-3.5 py-2 border bg-ink text-paper border-ink",
-                      "font-mono text-[10.5px] tracking-[0.18em] uppercase transition-colors",
+                      "inline-flex items-center gap-2 px-3 py-1.5 border bg-ink text-paper border-ink",
+                      "font-mono text-[10px] tracking-[0.18em] uppercase transition-colors",
                       "hover:bg-aquifer hover:border-aquifer disabled:opacity-50 disabled:cursor-not-allowed",
                     )}
                   >
@@ -243,7 +263,6 @@ function DemoAddressList({
                       : nextSlotHint === "primary"
                       ? "→ Primary"
                       : "Both filled"}
-                    <span aria-hidden>→</span>
                   </button>
                 ) : (
                   <InvestigateButton location={loc} mode={currentMode} />
@@ -271,16 +290,18 @@ function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
   if (!location) return null;
   return (
     <div className={cn("flex flex-col", compact ? "" : "flex-1 min-h-0 overflow-y-auto")}>
-      <header className="px-6 pt-5 pb-4 border-b border-rule">
+      <header className="px-5 pt-4 pb-3 border-b border-rule">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="dryline-label">
-              {slotLabel ? `${slotLabel === "primary" ? "Primary" : "Secondary"} · investigating` : "Investigating"}
+              {slotLabel
+                ? `${slotLabel === "primary" ? "Primary" : "Secondary"} · investigating`
+                : "Investigating"}
             </div>
-            <h2 className="font-serif text-[24px] leading-[1.1] tracking-[-0.008em] mt-1 truncate text-ink">
+            <h2 className="font-serif text-[20px] leading-[1.1] tracking-[-0.008em] mt-0.5 truncate text-ink">
               {location.label}
             </h2>
-            <div className="font-serif italic text-[14px] text-tideline mt-1">
+            <div className="font-serif italic text-[13px] text-tideline mt-1">
               {(mode ?? "personal") === "personal"
                 ? "Will the water last here?"
                 : "Who's drinking your aquifer?"}
@@ -289,13 +310,13 @@ function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
           <button
             type="button"
             onClick={reset}
-            className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors shrink-0"
+            className="font-mono text-[9.5px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2 py-1 transition-colors shrink-0"
             aria-label="Reset investigation"
           >
             Reset ↺
           </button>
         </div>
-        <div className="mt-3 flex items-center gap-3 font-mono text-[10px] tracking-[0.18em] uppercase">
+        <div className="mt-2 flex items-center gap-3 font-mono text-[9.5px] tracking-[0.18em] uppercase">
           <span className="flex items-center gap-1.5">
             <span
               aria-hidden
@@ -328,9 +349,9 @@ function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
         </div>
       </header>
 
-      <div className="px-6 py-4 space-y-5">
+      <div className="px-5 py-3 space-y-3.5">
         <section>
-          <div className="dryline-label mb-2">Reasoning trace</div>
+          <div className="dryline-label mb-1.5">Reasoning trace</div>
           <ReasoningTrace />
         </section>
         {score ? <DrylineScore score={score} /> : null}

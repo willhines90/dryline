@@ -34,45 +34,45 @@ export function DrylineScore({ score, className }: DrylineScoreProps) {
   return (
     <section
       className={cn(
-        "border border-rule bg-card px-5 py-4",
+        "border border-rule bg-card px-4 py-3",
         "shadow-paper",
         className,
       )}
     >
-      <div className="flex items-start gap-5">
+      <div className="flex items-start gap-4">
         <div className="shrink-0">
-          <div className="dryline-label mb-1.5">Dryline Score</div>
+          <div className="dryline-label mb-1">Dryline Score</div>
           <div
             className={cn(
               "font-serif font-medium leading-none tracking-[-0.02em]",
-              "text-[56px]",
+              "text-[40px]",
               totalColors.text,
             )}
             aria-label={`Dryline Score ${total} out of 100`}
           >
             {total}
-            <span className="font-mono text-tideline text-[16px] tracking-[0.02em] ml-1">/100</span>
+            <span className="font-mono text-tideline text-[13px] tracking-[0.02em] ml-1">/100</span>
           </div>
-          <div className="font-mono text-[10px] tracking-[0.18em] uppercase mt-1 text-tideline">
+          <div className="font-mono text-[9.5px] tracking-[0.18em] uppercase mt-0.5 text-tideline">
             {total >= 60 ? "High stress" : total >= 30 ? "Moderate stress" : "Low stress"}
           </div>
         </div>
 
-        <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex-1 min-w-0 space-y-1.5">
           {order.map((k) => {
             const v = score.subscores[k];
             const colors = bandColors(v);
             return (
-              <div key={k} className="text-[12px]">
-                <div className="flex items-baseline justify-between mb-0.5">
-                  <span className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-tideline">
+              <div key={k} className="text-[11.5px]">
+                <div className="flex items-baseline justify-between">
+                  <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-tideline">
                     {SUBSCORE_LABELS[k]}
                   </span>
-                  <span className={cn("font-mono text-[11px]", colors.text)}>
+                  <span className={cn("font-mono text-[10.5px]", colors.text)}>
                     {v}
                   </span>
                 </div>
-                <div className="h-1.5 bg-paper-deep overflow-hidden">
+                <div className="h-1 bg-paper-deep overflow-hidden">
                   <div
                     className={cn("h-full", colors.bar)}
                     style={{ width: `${v}%` }}
@@ -88,7 +88,7 @@ export function DrylineScore({ score, className }: DrylineScoreProps) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="mt-4 font-mono text-[10px] tracking-[0.16em] uppercase text-tideline hover:text-ink underline-offset-2 underline decoration-dotted"
+        className="mt-3 font-mono text-[9.5px] tracking-[0.16em] uppercase text-tideline hover:text-ink underline-offset-2 underline decoration-dotted"
         aria-expanded={open}
       >
         {open ? "Hide methodology ↑" : "Why this number? ↓"}

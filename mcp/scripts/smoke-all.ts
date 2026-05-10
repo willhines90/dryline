@@ -21,6 +21,8 @@ const CASES: Case[] = [
   { name: "get_drinking_water", args: { pwsId: "TX1050018" } },
   { name: "get_big_users_nearby", args: { lat: 29.997, lng: -98.099, radiusMi: 15 } },
   { name: "get_aquifer_status", args: { lat: 29.997, lng: -98.099, radiusMi: 20 } },
+  { name: "get_river_flow", args: { lat: 29.997, lng: -98.099, radiusMi: 25 } },
+  { name: "get_active_permits", args: { lat: 29.997, lng: -98.099, radiusMi: 15 } },
 ];
 
 async function run(c: Case) {

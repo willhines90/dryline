@@ -59,6 +59,8 @@ const PUBLISHED_TOOL_NAMES = new Set([
   "get_drinking_water",
   "get_big_users_nearby",
   "get_aquifer_status",
+  "get_river_flow",
+  "get_active_permits",
 ]);
 
 interface CacheEntry {
@@ -220,6 +222,22 @@ function summarizeTool(name: string, result: ToolResult<unknown>): string {
       const ind = list.filter((f) => f.permitCategory === "individual_npdes");
       const flowed = ind.filter((f) => f.actualAverageFlowMgd != null);
       return `${list.length} permittees · ${ind.length} individual NPDES · ${flowed.length} with reported flow`;
+    }
+    case "get_river_flow": {
+      const r = d as { gauges?: Array<{ siteName: string; currentCfs: number | null; distanceMi: number }> };
+      const list = r.gauges ?? [];
+      if (list.length === 0) return "no nearby gauges";
+      return list
+        .slice(0, 2)
+        .map((g) => `${g.siteName} ${g.currentCfs == null ? "—" : `${g.currentCfs} cfs`} (${g.distanceMi}mi)`)
+        .join("; ") + (list.length > 2 ? `; +${list.length - 2} more` : "");
+    }
+    case "get_active_permits": {
+      const r = d as { permits?: Array<{ permitCategory: string }> };
+      const list = r.permits ?? [];
+      const ind = list.filter((p) => p.permitCategory === "individual_npdes").length;
+      const gen = list.filter((p) => p.permitCategory === "general_permit").length;
+      return `${list.length} effective permits · ${ind} individual · ${gen} general`;
     }
     default:
       return "tool returned";
@@ -613,6 +631,18 @@ async function runInvestigation(
         writer,
         collected,
       ),
+      dispatchAndEmit(
+        "get_river_flow",
+        { lat, lng, radiusMi: 25, limit: 5 },
+        writer,
+        collected,
+      ),
+      dispatchAndEmit(
+        "get_active_permits",
+        { lat, lng, radiusMi: 15, limit: 20 },
+        writer,
+        collected,
+      ),
     ]);
   }
 
@@ -627,6 +657,8 @@ async function runInvestigation(
     "get_drinking_water",
     "get_big_users_nearby",
     "get_aquifer_status",
+    "get_river_flow",
+    "get_active_permits",
   ];
   const labeledResults = PROMPT_ORDER.flatMap((name) => {
     const m = collected.find((c) => c.name === name);

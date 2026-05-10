@@ -114,6 +114,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             locations={locations}
             focusedLocation={focused}
             investigationActive={investigationActive}
+            traces={primary.traces}
             onLocationClick={(loc) =>
               handlePick(loc as DemoLocationWithCoords)
             }

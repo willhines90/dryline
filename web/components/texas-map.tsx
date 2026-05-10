@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { DemoLocation, Mode } from "@/lib/types";
+import type { DemoLocation, Mode, TraceEvent } from "@/lib/types";
 import type { StyleSpecification } from "maplibre-gl";
+import {
+  LayerControl,
+  useLayerToggles,
+  type LayerSpec,
+  type LayerKey,
+} from "./dryline/layer-control";
 
 type MapInstance = import("maplibre-gl").Map;
 type MarkerInstance = import("maplibre-gl").Marker;
@@ -13,11 +19,6 @@ const TEXAS_BOUNDS: [[number, number], [number, number]] = [
   [-93.2, 36.8],
 ];
 
-/**
- * Carto Voyager — clean, low-saturation basemap that lets our pins and
- * overlays read clearly. (OpenTopoMap was rate-limited and hard to
- * compose against.)
- */
 const BASE_STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -37,41 +38,47 @@ const BASE_STYLE: StyleSpecification = {
   layers: [{ id: "base", type: "raster", source: "base" }],
 };
 
-/**
- * Curated set of major TX reservoirs we want pinned on the basemap as
- * permanent context. Lat/lng from TWDB; named after the lake itself.
- * Color = aquifer blue; capacity isn't shown live to keep the map
- * snappy on first paint.
- */
-const RESERVOIR_PINS: Array<{ name: string; lat: number; lng: number }> = [
-  { name: "Lake Travis", lat: 30.391869, lng: -97.907234 },
-  { name: "Canyon Lake", lat: 29.86883, lng: -98.198898 },
-  { name: "Lake Granger", lat: 30.7029, lng: -97.339 },
-  { name: "Lake Buchanan", lat: 30.785, lng: -98.4178 },
-  { name: "Lake LBJ", lat: 30.5519, lng: -98.3539 },
-  { name: "Lake Conroe", lat: 30.4413, lng: -95.5747 },
-  { name: "Lake Houston", lat: 29.9211, lng: -95.1402 },
-  { name: "Lake Texoma", lat: 33.8316, lng: -96.7022 },
-  { name: "Possum Kingdom Lake", lat: 32.8762, lng: -98.4283 },
-  { name: "Lake Whitney", lat: 31.9332, lng: -97.3711 },
-  { name: "Lake Tawakoni", lat: 32.8728, lng: -95.9569 },
-  { name: "Sam Rayburn Reservoir", lat: 31.0606, lng: -94.1062 },
-  { name: "Toledo Bend Reservoir", lat: 31.5739, lng: -93.7488 },
-  { name: "Caddo Lake", lat: 32.7193, lng: -94.1149 },
-  { name: "Choke Canyon Reservoir", lat: 28.4894, lng: -98.2519 },
-  { name: "Falcon Lake", lat: 26.5566, lng: -99.1433 },
-  { name: "Amistad Reservoir", lat: 29.4513, lng: -101.0297 },
-  { name: "Red Bluff Reservoir", lat: 31.8967, lng: -103.9197 },
+/** Curated set of major TX reservoirs we want pinned on the basemap. */
+const RESERVOIR_PINS: Array<{ name: string; slug: string; lat: number; lng: number }> = [
+  { name: "Lake Travis", slug: "travis", lat: 30.391869, lng: -97.907234 },
+  { name: "Canyon Lake", slug: "canyon", lat: 29.86883, lng: -98.198898 },
+  { name: "Lake Granger", slug: "granger", lat: 30.7029, lng: -97.339 },
+  { name: "Lake Buchanan", slug: "buchanan", lat: 30.785, lng: -98.4178 },
+  { name: "Lake LBJ", slug: "lbj", lat: 30.5519, lng: -98.3539 },
+  { name: "Lake Conroe", slug: "conroe", lat: 30.4413, lng: -95.5747 },
+  { name: "Lake Houston", slug: "houston", lat: 29.9211, lng: -95.1402 },
+  { name: "Lake Texoma", slug: "texoma", lat: 33.8316, lng: -96.7022 },
+  { name: "Possum Kingdom Lake", slug: "possum_kingdom", lat: 32.8762, lng: -98.4283 },
+  { name: "Lake Whitney", slug: "whitney", lat: 31.9332, lng: -97.3711 },
+  { name: "Lake Tawakoni", slug: "tawakoni", lat: 32.8728, lng: -95.9569 },
+  { name: "Sam Rayburn Reservoir", slug: "sam_rayburn", lat: 31.0606, lng: -94.1062 },
+  { name: "Toledo Bend Reservoir", slug: "toledo_bend", lat: 31.5739, lng: -93.7488 },
+  { name: "Caddo Lake", slug: "caddo", lat: 32.7193, lng: -94.1149 },
+  { name: "Choke Canyon Reservoir", slug: "choke_canyon", lat: 28.4894, lng: -98.2519 },
+  { name: "Falcon Lake", slug: "falcon", lat: 26.5566, lng: -99.1433 },
+  { name: "Amistad Reservoir", slug: "amistad", lat: 29.4513, lng: -101.0297 },
+  { name: "Red Bluff Reservoir", slug: "red_bluff", lat: 31.8967, lng: -103.9197 },
 ];
 
 function modeMarker(mode: Mode | undefined, isLive: boolean | undefined): {
   fill: string;
   ring: string;
 } {
-  if (!isLive) return { fill: "#9ec5cf", ring: "#dde6e9" }; // spring + paper-deep
-  if (mode === "transparency") return { fill: "#b58a52", ring: "#7a5a2c" }; // ochre + ochre-deep
-  return { fill: "#0d3b6f", ring: "#9ec5cf" }; // aquifer + spring
+  if (!isLive) return { fill: "#9ec5cf", ring: "#dde6e9" };
+  if (mode === "transparency") return { fill: "#b58a52", ring: "#7a5a2c" };
+  return { fill: "#0d3b6f", ring: "#9ec5cf" };
 }
+
+const DROUGHT_COLORS = ["#cdd9b4", "#cfb27a", "#a85a35", "#6f1d10", "#4a0d05"];
+// DM 0=D0(abnormal), 1=D1(moderate), 2=D2(severe), 3=D3(extreme), 4=D4(exceptional)
+
+const LAYER_SPECS: LayerSpec[] = [
+  { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, filtered to Texas." },
+  { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs." },
+  { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Coming soon — main-stem TX rivers." , disabled: true },
+  { key: "aquifers", label: "Aquifer regions", swatch: "#1f4d4a", hint: "Coming soon — TWDB major aquifer polygons.", disabled: true },
+  { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "Coming soon — USGS NWIS active gauges." , disabled: true },
+];
 
 type MapLocation = DemoLocation & {
   approxLatLng?: { lat: number; lng: number };
@@ -80,12 +87,11 @@ type MapLocation = DemoLocation & {
 
 interface TexasMapProps {
   locations: MapLocation[];
-  /** When set, the map flies to this location's approxLatLng. */
   focusedLocation?: MapLocation | null;
-  /** When true, draw a pulsing ring + 15mi search disk at the focused location. */
   investigationActive?: boolean;
-  /** Click handler for any demo pin. */
   onLocationClick?: (loc: MapLocation) => void;
+  /** Tool-result events from the active investigation drive map storytelling. */
+  traces?: TraceEvent[];
 }
 
 export function TexasMap({
@@ -93,21 +99,26 @@ export function TexasMap({
   focusedLocation,
   investigationActive,
   onLocationClick,
+  traces,
 }: TexasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const markersRef = useRef<Array<{ marker: MarkerInstance; popup: PopupInstance }>>([]);
-  const reservoirMarkersRef = useRef<MarkerInstance[]>([]);
+  const reservoirMarkersRef = useRef<
+    Array<{ slug: string; marker: MarkerInstance; element: HTMLDivElement }>
+  >([]);
   const mapReadyRef = useRef(false);
+  const [mapReadyState, setMapReadyState] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
   const onLocationClickRef = useRef(onLocationClick);
 
-  // Keep latest click handler accessible from inside the map "load" callback
-  // without re-mounting the map every render.
+  const { state: layerState, toggle: toggleLayer } = useLayerToggles(LAYER_SPECS);
+
   useEffect(() => {
     onLocationClickRef.current = onLocationClick;
   }, [onLocationClick]);
 
+  // ---- 1. Map mount + permanent markers ----
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     let cancelled = false;
@@ -137,12 +148,13 @@ export function TexasMap({
         map.on("load", () => {
           map.fitBounds(TEXAS_BOUNDS, { padding: 36, duration: 0 });
           mapReadyRef.current = true;
+          setMapReadyState(true);
 
-          // Reservoirs as permanent low-saturation context dots.
+          // Reservoirs (bottom of marker stack)
           for (const r of RESERVOIR_PINS) {
             const dot = document.createElement("div");
             dot.style.cssText =
-              "width:10px;height:10px;border-radius:99px;background:#4a8aa8;border:2px solid #d6e4e6;box-shadow:0 0 0 1px rgba(7,23,31,0.18);";
+              "width:10px;height:10px;border-radius:99px;background:#4a8aa8;border:2px solid #d6e4e6;box-shadow:0 0 0 1px rgba(7,23,31,0.18);transition:transform 200ms ease, box-shadow 200ms ease;";
             dot.title = r.name;
             const popup = new maplibregl.Popup({
               offset: 14,
@@ -157,10 +169,10 @@ export function TexasMap({
               .addTo(map);
             dot.addEventListener("mouseenter", () => popup.setLngLat([r.lng, r.lat]).addTo(map));
             dot.addEventListener("mouseleave", () => popup.remove());
-            reservoirMarkersRef.current.push(marker);
+            reservoirMarkersRef.current.push({ slug: r.slug, marker, element: dot });
           }
 
-          // Demo address pins — bigger, mode-colored, clickable.
+          // Demo address pins (top of marker stack)
           for (const location of locations) {
             if (!location.approxLatLng) continue;
             const colors = modeMarker(location.mode, location.live);
@@ -219,7 +231,7 @@ export function TexasMap({
         marker.remove();
       });
       markersRef.current = [];
-      reservoirMarkersRef.current.forEach((m) => m.remove());
+      reservoirMarkersRef.current.forEach(({ marker }) => marker.remove());
       reservoirMarkersRef.current = [];
       mapReadyRef.current = false;
       mapRef.current?.remove();
@@ -227,7 +239,7 @@ export function TexasMap({
     };
   }, [locations]);
 
-  // Camera control: flyTo when focused, fitBounds when cleared.
+  // ---- 2. Camera control ----
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -247,43 +259,28 @@ export function TexasMap({
     else map.once("load", apply);
   }, [focusedLocation]);
 
-  // Investigation overlay: a 15mi disk + pulsing ring at the focused address.
-  // Adds/removes a circle source + two layers from the map's style. Avoids
-  // overlapping symbol IDs by mounting a single-feature GeoJSON source.
+  // ---- 3. Active investigation overlay (radius disk) ----
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const apply = async () => {
-      const maplibregl = await import("maplibre-gl");
-      void maplibregl;
+    const apply = () => {
       const SRC = "dryline-active-radius";
       const FILL = "dryline-active-radius-fill";
       const STROKE = "dryline-active-radius-stroke";
-
-      const cleanup = () => {
-        try {
-          if (map.getLayer(STROKE)) map.removeLayer(STROKE);
-          if (map.getLayer(FILL)) map.removeLayer(FILL);
-          if (map.getSource(SRC)) map.removeSource(SRC);
-        } catch {
-          /* not yet mounted */
-        }
-      };
-
-      cleanup();
+      try {
+        if (map.getLayer(STROKE)) map.removeLayer(STROKE);
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* not yet */
+      }
       if (!focusedLocation?.approxLatLng) return;
-
       const { lat, lng } = focusedLocation.approxLatLng;
-      // Build a 64-vertex circle approximation in lat/lng space (15 mi radius).
-      const milesToDeg = (mi: number, atLat: number) => ({
-        dLat: mi / 69,
-        dLng: mi / (69 * Math.cos((atLat * Math.PI) / 180)),
-      });
-      const { dLat, dLng } = milesToDeg(15, lat);
+      const dLat = 15 / 69;
+      const dLng = 15 / (69 * Math.cos((lat * Math.PI) / 180));
       const ring: [number, number][] = [];
-      const steps = 64;
-      for (let i = 0; i <= steps; i++) {
-        const a = (i / steps) * 2 * Math.PI;
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * 2 * Math.PI;
         ring.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
       }
       map.addSource(SRC, {
@@ -298,7 +295,10 @@ export function TexasMap({
         id: FILL,
         type: "fill",
         source: SRC,
-        paint: { "fill-color": "#0d3b6f", "fill-opacity": investigationActive ? 0.08 : 0.04 },
+        paint: {
+          "fill-color": "#0d3b6f",
+          "fill-opacity": investigationActive ? 0.08 : 0.04,
+        },
       });
       map.addLayer({
         id: STROKE,
@@ -316,40 +316,130 @@ export function TexasMap({
     else map.once("load", apply);
   }, [focusedLocation, investigationActive]);
 
+  // ---- 4. Drought layer (USDM) ----
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-usdm";
+    const FILL = "dryline-usdm-fill";
+
+    const cleanup = () => {
+      try {
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* idempotent */
+      }
+    };
+
+    if (!layerState.drought) {
+      cleanup();
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch("/api/layers/usdm", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, { type: "geojson", data: fc });
+        map.addLayer(
+          {
+            id: FILL,
+            type: "fill",
+            source: SRC,
+            paint: {
+              "fill-color": [
+                "match",
+                ["coalesce", ["get", "DM"], 0],
+                0,
+                DROUGHT_COLORS[0]!,
+                1,
+                DROUGHT_COLORS[1]!,
+                2,
+                DROUGHT_COLORS[2]!,
+                3,
+                DROUGHT_COLORS[3]!,
+                4,
+                DROUGHT_COLORS[4]!,
+                DROUGHT_COLORS[0]!,
+              ],
+              "fill-opacity": 0.22,
+              "fill-outline-color": "#7a5a2c",
+            },
+          },
+          // Insert above the base raster but below any subsequent layers
+          undefined,
+        );
+        // Move drought to bottom of overlay stack so reservoir/address pins sit above
+        // (markers are HTML elements, drawn above all canvas layers regardless).
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] drought layer failed:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [layerState.drought, mapReadyState]);
+
+  // ---- 5. Reservoir visibility toggle ----
+  useEffect(() => {
+    for (const { element } of reservoirMarkersRef.current) {
+      element.style.display = layerState.reservoirs ? "" : "none";
+    }
+  }, [layerState.reservoirs, mapReadyState]);
+
+  // ---- 6. Storytelling: react to tool_result events ----
+  useEffect(() => {
+    if (!traces || traces.length === 0) return;
+    const map = mapRef.current;
+    if (!map) return;
+    // Only react to the LATEST event we haven't seen.
+    const latest = traces[traces.length - 1];
+    if (!latest || latest.type !== "tool_result") return;
+
+    if (latest.toolName === "get_reservoirs") {
+      // Pulse markers whose slug matches one returned by the tool.
+      const data = latest.data as { reservoirs?: Array<{ slug?: string }> } | null;
+      const slugs = new Set((data?.reservoirs ?? []).map((r) => r.slug ?? "").filter(Boolean));
+      for (const { slug, element } of reservoirMarkersRef.current) {
+        if (slugs.has(slug)) {
+          element.style.transform = "scale(1.6)";
+          element.style.boxShadow = "0 0 0 4px rgba(13,59,111,0.35)";
+          window.setTimeout(() => {
+            element.style.transform = "scale(1)";
+            element.style.boxShadow = "0 0 0 1px rgba(7,23,31,0.18)";
+          }, 1400);
+        }
+      }
+    }
+  }, [traces]);
+
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-foam">
       <div ref={containerRef} className="dryline-map absolute inset-0" />
 
-      {/* Title overlay */}
       <div className="pointer-events-none absolute left-4 top-4 max-w-[260px] rounded-none border border-rule bg-paper/95 px-3 py-2 backdrop-blur-sm shadow-paper">
         <p className="dryline-label">Texas water · live</p>
         <p className="font-serif text-[13.5px] text-ink leading-snug mt-1">
-          Major reservoirs in tide blue. Demo addresses colored by mode.
+          Drought polygon under everything; reservoirs and demo addresses on top.
         </p>
       </div>
 
-      {/* Legend (bottom-left) */}
-      <div className="pointer-events-none absolute left-4 bottom-4 rounded-none border border-rule bg-paper/95 px-3 py-2 backdrop-blur-sm shadow-paper">
-        <p className="dryline-label mb-1.5">Legend</p>
-        <ul className="space-y-1 text-[11px] font-serif text-ink/85">
-          <li className="flex items-center gap-2">
-            <span className="inline-block w-3 h-3 rounded-full border-2 border-spring" style={{ background: "#0d3b6f" }} />
-            Personal mode address
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="inline-block w-3 h-3 rounded-full border-2 border-ochre-deep" style={{ background: "#b58a52" }} />
-            Transparency mode address
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="inline-block w-2.5 h-2.5 rounded-full border-2 border-foam" style={{ background: "#4a8aa8" }} />
-            TWDB-tracked reservoir
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="inline-block w-3 h-3 border border-aquifer/60 bg-aquifer/10" />
-            15 mi industrial-search radius
-          </li>
-        </ul>
-      </div>
+      <LayerControl
+        specs={LAYER_SPECS}
+        state={layerState}
+        onToggle={toggleLayer}
+        className="pointer-events-auto absolute right-4 bottom-4 w-[220px]"
+      />
 
       {mountError ? (
         <div className="absolute inset-x-6 bottom-6 border border-rust bg-paper-warm px-4 py-3 text-xs text-ink shadow-paper">

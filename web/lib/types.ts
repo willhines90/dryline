@@ -88,3 +88,19 @@ export interface SynthesisPayload {
 }
 
 export type InvestigationStatus = "idle" | "streaming" | "done" | "error";
+
+// ---- Dryline Score (Phase 4.6) ----
+
+export type SubscoreKey =
+  | "drought"
+  | "aquifer"
+  | "drinkingWater"
+  | "industrial"
+  | "reservoir";
+
+export interface ScorePayload {
+  score: number;
+  subscores: Record<SubscoreKey, number>;
+  rationale: Record<SubscoreKey, string>;
+  methodology: string;
+}

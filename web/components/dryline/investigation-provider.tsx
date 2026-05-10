@@ -19,6 +19,7 @@ import type {
   DemoLocationWithCoords,
   InvestigationStatus,
   Mode,
+  ScorePayload,
   SynthesisPayload,
   TraceEvent,
 } from "@/lib/types";
@@ -31,6 +32,7 @@ interface InvestigationState {
   traces: TraceEvent[];
   synthesis: SynthesisPayload | null;
   artifact: ArtifactPayload | null;
+  score: ScorePayload | null;
   error: string | null;
 }
 
@@ -47,6 +49,7 @@ const initialState: InvestigationState = {
   traces: [],
   synthesis: null,
   artifact: null,
+  score: null,
   error: null,
 };
 
@@ -81,6 +84,7 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
         traces: [],
         synthesis: null,
         artifact: null,
+        score: null,
         error: null,
       });
 
@@ -209,6 +213,20 @@ function handleEvent(
             caveats: Array.isArray(p.caveats) ? (p.caveats as never) : [],
           },
         ],
+      }));
+      return;
+    }
+    case "score": {
+      const p = payload as Partial<import("@/lib/types").ScorePayload>;
+      if (typeof p.score !== "number" || !p.subscores || !p.rationale || !p.methodology) return;
+      setState((s) => ({
+        ...s,
+        score: {
+          score: p.score!,
+          subscores: p.subscores!,
+          rationale: p.rationale!,
+          methodology: p.methodology!,
+        },
       }));
       return;
     }

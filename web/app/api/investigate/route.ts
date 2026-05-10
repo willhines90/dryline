@@ -41,6 +41,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { tools as drylineTools } from "@dryline/mcp/tools";
 import type { Caveat, Source, ToolResult } from "@dryline/mcp/types";
+import { computeDrylineScore } from "@/lib/dryline-score";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -291,11 +292,11 @@ async function dispatchAndEmit(
   name: string,
   args: unknown,
   writer: StreamWriter,
-  results: ToolResult<unknown>[],
+  results: Array<{ name: string; result: ToolResult<unknown> }>,
 ): Promise<DispatchResult> {
   writer.emit("tool_start", { toolName: name, args });
   const dispatched = await dispatchTool(name, args);
-  results.push(dispatched.toolResult);
+  results.push({ name, result: dispatched.toolResult });
   writer.emit("tool_result", {
     toolName: name,
     summary: dispatched.summary,
@@ -569,7 +570,7 @@ async function runInvestigation(
     return { cacheable: false };
   }
 
-  const collected: ToolResult<unknown>[] = [];
+  const collected: Array<{ name: string; result: ToolResult<unknown> }> = [];
 
   // Phase 1: resolve_location must succeed before the others can run.
   const resolved = await dispatchAndEmit("resolve_location", { address }, writer, collected);
@@ -617,7 +618,9 @@ async function runInvestigation(
 
   // Phase 3: synthesis-only model call.
   const skill = await getSkillPrompt();
-  const TOOL_ORDER = [
+  // collected already carries {name, result}; render order is fixed for
+  // the prompt (not the resolution order, which is parallel).
+  const PROMPT_ORDER = [
     "resolve_location",
     "get_drought_status",
     "get_reservoirs",
@@ -625,12 +628,27 @@ async function runInvestigation(
     "get_big_users_nearby",
     "get_aquifer_status",
   ];
-  const labeledResults = collected.map((r, i) => ({
-    name: TOOL_ORDER[i] ?? "tool",
-    result: r,
-  }));
+  const labeledResults = PROMPT_ORDER.flatMap((name) => {
+    const m = collected.find((c) => c.name === name);
+    return m ? [m] : [];
+  });
+
+  // Compute the Dryline Score from the tool outputs and emit a 'score'
+  // event before we ask the model to synthesize. Synthesis prompt then
+  // gets the score number so it can lead with it when meaningful.
+  const scoreCard = computeDrylineScore(collected);
+  writer.emit("score", scoreCard);
 
   const userMessage = `Investigate the water situation at this Texas address: ${address}
+
+The Dryline Score for this address is **${scoreCard.score}/100** (higher = more water stress). Subscores:
+- drought:        ${scoreCard.subscores.drought}/100
+- aquifer:        ${scoreCard.subscores.aquifer}/100
+- drinking water: ${scoreCard.subscores.drinkingWater}/100
+- industrial:     ${scoreCard.subscores.industrial}/100
+- reservoir:      ${scoreCard.subscores.reservoir}/100
+
+Reference the score in the lede if it tells the story (e.g., "Wimberley scores 64 — stress driven primarily by aquifer decline and drought severity"). Do not invent the score; use the number above.
 
 Tool results (already gathered for you):
 
@@ -720,7 +738,7 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
   }
 
   const { synthesis, artifact } = parseFinalText(finalText);
-  const sourcesUnion = collectSourcesFromToolResults(collected);
+  const sourcesUnion = collectSourcesFromToolResults(collected.map((c) => c.result));
   writer.emit("synthesis", { markdown: synthesis, sources: sourcesUnion });
   if (artifact) writer.emit("artifact", artifact);
   writer.emit("done", {});

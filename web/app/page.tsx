@@ -28,6 +28,7 @@ import { ReasoningTrace } from "@/components/dryline/reasoning-trace";
 import { SynthesisCard } from "@/components/dryline/synthesis-card";
 import { ActionsTab } from "@/components/dryline/actions-tab";
 import { DrylineLogo } from "@/components/dryline/dryline-logo";
+import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
 import { StatusFooter } from "@/components/dryline/status-footer";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
@@ -170,7 +171,7 @@ function DemoAddressList({
 }
 
 function InvestigationPanel() {
-  const { location, mode, status, reset, error } = useInvestigation();
+  const { location, mode, status, reset, error, score } = useInvestigation();
   if (!location) return null;
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
@@ -237,6 +238,7 @@ function InvestigationPanel() {
           <div className="dryline-label mb-2">Reasoning trace</div>
           <ReasoningTrace />
         </section>
+        {score ? <DrylineScore score={score} /> : null}
         <section>
           <SynthesisCard />
         </section>

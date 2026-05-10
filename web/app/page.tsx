@@ -30,12 +30,12 @@ import { ActionsTab } from "@/components/dryline/actions-tab";
 import { DrylineLogo } from "@/components/dryline/dryline-logo";
 import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
-import { StatusFooter } from "@/components/dryline/status-footer";
 import { CompareToggle } from "@/components/dryline/compare-toggle";
 import { ComparisonHero } from "@/components/dryline/comparison-hero";
 import { AboutModal } from "@/components/dryline/about-modal";
 import { AgenticToggle } from "@/components/dryline/agentic-toggle";
 import { TraceSkeleton } from "@/components/dryline/trace-skeleton";
+import type { TraceEvent } from "@/lib/types";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
 
   return (
     <main className="h-screen flex flex-col overflow-hidden bg-background">
-      <header className="shrink-0 border-b border-rule bg-background/90 backdrop-blur-sm">
+      <header className="shrink-0 relative z-40 border-b border-rule bg-background/90 backdrop-blur-sm" style={{ isolation: "isolate" }}>
         <div className="px-5 py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-baseline gap-3 min-w-0">
             <Link href="/" className="flex items-center gap-2 no-underline">
@@ -131,8 +131,6 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
           )}
         </aside>
       </section>
-
-      <StatusFooter />
 
       <ActionsTab />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />

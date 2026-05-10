@@ -74,10 +74,10 @@ const DROUGHT_COLORS = ["#cdd9b4", "#cfb27a", "#a85a35", "#6f1d10", "#4a0d05"];
 
 const LAYER_SPECS: LayerSpec[] = [
   { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, filtered to Texas." },
+  { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
   { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs." },
-  { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Coming soon — main-stem TX rivers." , disabled: true },
+  { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
   { key: "aquifers", label: "Aquifer regions", swatch: "#1f4d4a", hint: "Coming soon — TWDB major aquifer polygons.", disabled: true },
-  { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "Coming soon — USGS NWIS active gauges." , disabled: true },
 ];
 
 type MapLocation = DemoLocation & {
@@ -396,6 +396,154 @@ export function TexasMap({
       element.style.display = layerState.reservoirs ? "" : "none";
     }
   }, [layerState.reservoirs, mapReadyState]);
+
+  // ---- 5b. Rivers layer (static GeoJSON) ----
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-rivers";
+    const LINE = "dryline-rivers-line";
+    const cleanup = () => {
+      try {
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* idempotent */
+      }
+    };
+    if (!layerState.rivers) {
+      cleanup();
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch("/tx-rivers.geojson", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, { type: "geojson", data: fc });
+        map.addLayer({
+          id: LINE,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": "#0d3b6f",
+            "line-opacity": 0.55,
+            "line-width": 1.5,
+          },
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] rivers layer failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [layerState.rivers, mapReadyState]);
+
+  // ---- 5c. USGS gauges layer (live data) ----
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-gauges";
+    const CIRCLES = "dryline-gauges-circles";
+    const cleanup = () => {
+      try {
+        if (map.getLayer(CIRCLES)) map.removeLayer(CIRCLES);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* idempotent */
+      }
+    };
+    if (!layerState.gauges) {
+      cleanup();
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch("/api/layers/usgs-gauges", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const payload = (await res.json()) as {
+          gauges?: Array<{
+            siteCode: string;
+            siteName: string;
+            lat: number;
+            lng: number;
+            currentCfs: number | null;
+            latestReadingAt: string | null;
+          }>;
+        };
+        const gauges = payload.gauges ?? [];
+        if (cancelled || gauges.length === 0) return;
+        const features = gauges.map((g) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [g.lng, g.lat] },
+          properties: {
+            siteCode: g.siteCode,
+            siteName: g.siteName,
+            cfs: g.currentCfs,
+            ts: g.latestReadingAt,
+          },
+        }));
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features },
+        });
+        map.addLayer({
+          id: CIRCLES,
+          type: "circle",
+          source: SRC,
+          paint: {
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              2,
+              8,
+              3,
+              10,
+              4.5,
+            ],
+            // Color by current cfs (step expression on a coalesced number):
+            //   < 0.5 cfs (no reading or dry) → tideline gray
+            //   0.5–49 cfs                    → ochre (low flow)
+            //   50–499 cfs                    → river (normal)
+            //   ≥ 500 cfs                     → aquifer (high)
+            "circle-color": [
+              "step",
+              ["coalesce", ["to-number", ["get", "cfs"]], -1],
+              "#4a6c78",
+              0.5,
+              "#b58a52",
+              50,
+              "#4a8aa8",
+              500,
+              "#0d3b6f",
+            ],
+            "circle-stroke-color": "#eef2f3",
+            "circle-stroke-width": 1,
+            "circle-opacity": 0.85,
+          },
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] gauges layer failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [layerState.gauges, mapReadyState]);
 
   // ---- 6. Storytelling: react to tool_result events ----
   useEffect(() => {

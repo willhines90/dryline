@@ -17,7 +17,7 @@ Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (
 
 Texas added 4 million people in five years. Our water didn't keep up. The data is real, public, and federally published — but it's spread across a stack of state and federal agencies, each with a different update cadence, access pattern, and freshness profile. By the time a homeowner finds out their groundwater table dropped twelve feet last decade, or that a new fab three miles upstream just got a discharge permit, the comment window has closed.
 
-Dryline collapses that distance. Type any Texas address. An agent fans out across drought, reservoirs, drinking water, aquifer monitoring, and federally-reportable industrial dischargers, returning each tool's result with **inline citations and structured caveats** — no black-box answers, no hedged guesses. A synthesis card lands the situation in 2–4 paragraphs of cited prose. A drafted artifact slides in from the right edge: a watering reminder, a well-outlook briefing, a public comment with a real NPDES permit ID, a letter to a Groundwater Conservation District, or a Public Information Act request.
+Dryline collapses that distance. Type any Texas address. An agent fans out across drought, reservoirs, drinking water, aquifer monitoring, federally-reportable industrial dischargers, stream gauges, and active permits — returning each tool's result with **inline citations and structured caveats**. No black-box answers, no hedged guesses. A synthesis card lands the situation in 2–4 paragraphs of cited prose. A drafted artifact slides in from the right edge: a watering reminder, a well-outlook briefing, a public comment with a real NPDES permit ID, a letter to a Groundwater Conservation District, or a Public Information Act request.
 
 Same investigation, two presentations:
 
@@ -25,6 +25,73 @@ Same investigation, two presentations:
 |---|---|---|
 | **Personal** — *Will the water last here?* | Lived-experience: well owners, utility customers, families considering a move. Leads with the local aquifer trend and the utility's compliance posture. | `watering_reminder` or `well_outlook_briefing` |
 | **Transparency** — *Who's drinking your aquifer?* | Systemic: journalists, civic researchers, residents tracking nearby industrial buildouts. Leads with a *tension flag* pairing two facts (e.g., reservoir below historical average + large permitted draw nearby). | `public_comment`, `gcd_letter`, or `pia_request` |
+
+---
+
+## First-time-user quickstart
+
+Never used Dryline? Read this once and you're set.
+
+1. **The map (left side).** Texas under a current-week U.S. Drought Monitor color wash. Tide-blue dots are the 18 major TWDB-instrumented reservoirs. Mode-colored dots (aquifer-blue or ochre) are the seven pre-staged demo addresses. Click any of them — or use the search bar (⌘K) to type your own address.
+
+2. **The right panel.** Once an address is picked, the panel transforms into the active investigation:
+   - **Reasoning trace** at the top — every tool call streams in as it lands, with a one-line plain-English label, citation chips ([1] [2] …) linking to the actual public source, and structured caveat badges (info / warning / error · category).
+   - **Dryline Score** in the middle — single 0–100 number summarizing water stress at this address. Hover *Why this number?* for the per-subscore rationale.
+   - **Synthesis** at the bottom — 2–4 paragraphs of cited prose. Every fact-bearing sentence links to its source URL with a retrieval timestamp.
+
+3. **The drafted artifact (right edge).** When the investigation finishes, a tab pulses on the right edge labeled *Action ↗*. Click it to slide in the drafted civic-action document — a public comment, a watering reminder, a GCD letter, or a Public Information Act request, formatted as a letter with `To:` / `RE:` headers. There's a **Review before sending** banner above it. There is no auto-submit. The agent puts a draft in your hands; you decide what to do with it.
+
+4. **Compare two addresses.** Click the **Compare** toggle in the header. Pick two demo addresses (or two free-text addresses). The panel splits — primary on top, secondary below — and a hero strip lights up above both showing the two Dryline Scores side by side and the three biggest subscore deltas. Useful for "Wimberley vs Taylor" stories.
+
+5. **See the agent really decide.** Click the **Agentic** toggle in the header. Future investigations now hit `/api/investigate?agent=1` — a real OpenAI Responses-API tool-calling loop where the model picks which tools to call. Slower (≈30 s vs the deterministic ≈18 s), more variable, but the agent's judgment is on stage. We've watched it skip `get_big_users_nearby` for personal-mode rural addresses and skip `get_drinking_water` when the story is groundwater. Toggle off for rehearsed demo timing.
+
+---
+
+## Acronyms — read first if any of these are unfamiliar
+
+Texas water lives in the agency stack. Hover any underlined abbreviation in the app for a definition; here's the full set in one place.
+
+### Agencies & datasets
+
+| Short | Full | What it is for Dryline |
+|---|---|---|
+| **TWDB** | Texas Water Development Board | The state agency that funds and tracks water-supply data. We pull reservoir levels and the Groundwater Database from them. |
+| **GWDB** | TWDB Groundwater Database | A nightly-refreshed pipe-delimited dump of every Texas monitoring well's metadata + historical water-level readings. Source for `get_aquifer_status`. |
+| **USDM** | U.S. Drought Monitor | A federal weekly classification of drought severity, county-level: None / D0 (abnormal) / D1 (moderate) / D2 (severe) / D3 (extreme) / D4 (exceptional). |
+| **USGS** | U.S. Geological Survey | Federal earth-science agency. Operates the NWIS stream-gauge network. |
+| **NWIS** | USGS National Water Information System | Public REST service for stream gauges. Source for `get_river_flow`. |
+| **EPA** | U.S. Environmental Protection Agency | Federal regulator. We draw on EPA's ECHO and SDWIS systems. |
+| **ECHO** | EPA Enforcement and Compliance History Online | Public API surface for federally-reportable permits, facilities, and enforcement. Sources for `get_drinking_water`, `get_big_users_nearby`, `get_active_permits`. |
+| **SDWIS** | EPA Safe Drinking Water Information System | Federal database of public water systems and their compliance with the Safe Drinking Water Act. |
+| **CWA** | Clean Water Act | The federal law that governs surface-water discharge, NPDES permits, and effluent standards. |
+| **NPDES** | National Pollutant Discharge Elimination System | The federal permit program for any pollutant entering U.S. surface waters. NPDES IDs (e.g. `TX0142646` for Wimberley's Blue Sky WRF) appear in the public-comment drafts. |
+| **TCEQ** | Texas Commission on Environmental Quality | The Texas state environmental regulator. Most state-only permits (water rights, RG-211) live here. We don't yet integrate TCEQ's web forms. |
+
+### Permit, system, and unit terms
+
+| Short | Full | Notes |
+|---|---|---|
+| **PWS** | Public Water System | A utility regulated under the Safe Drinking Water Act. |
+| **PWSID** | Public Water System ID | Federal identifier, e.g. `TX1050018` = Wimberley Water Supply Corporation. |
+| **GCD** | Groundwater Conservation District | A Texas local-government unit that regulates groundwater pumping. Created county-by-county. |
+| **WCID** | Water Control and Improvement District | A Texas local-government unit that supplies water and/or wastewater service. |
+| **DMR** | Discharge Monitoring Report | An EPA-required self-report by NPDES permittees. |
+| **DFR** | Detailed Facility Report | EPA ECHO's per-facility public dashboard. Linked from every Dryline permit result. |
+| **HUC** | Hydrologic Unit Code | USGS hierarchical watershed identifier (HUC-2 down to HUC-12). |
+| **FIPS** | Federal Information Processing Standards code | 5-digit county identifier. `48209` = Hays County, TX. |
+| **MCL** | Maximum Contaminant Level | Highest legally allowable concentration of a contaminant in drinking water under SDWA. |
+| **MRDL** | Maximum Residual Disinfectant Level | Like an MCL, for the disinfectant itself (chlorine, chloramine). |
+| **TT** | Treatment Technique | An SDWA compliance category for procedures (vs concentration limits). |
+| **MGD** | Million gallons per day | Standard unit for permitted discharge or supply volume. |
+| **CFS** | Cubic feet per second | Standard unit for stream discharge. |
+| **PIA** | Public Information Act | The Texas open-records law (Government Code Chapter 552). |
+
+### Architecture terms
+
+| Short | Full | Notes |
+|---|---|---|
+| **MCP** | Model Context Protocol | Anthropic's open standard for letting AI agents call external tools and resources. Dryline ships an MCP server. |
+| **SSE** | Server-Sent Events | One-way streaming over plain HTTP. How `/api/investigate` streams reasoning-trace events to the browser. |
 
 ---
 

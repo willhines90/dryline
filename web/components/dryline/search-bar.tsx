@@ -246,7 +246,7 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
       </div>
 
       {open && candidates.length === 0 && q.trim() ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-50">
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-[100]">
           <div className="px-3 py-2.5 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
             No staged match · run live
           </div>
@@ -277,7 +277,7 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
       ) : null}
 
       {open && candidates.length > 0 ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-50 max-h-[380px] overflow-y-auto">
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-[100] max-h-[380px] overflow-y-auto">
           <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
             {q.trim()
               ? `${candidates.length} MATCH${candidates.length === 1 ? "" : "ES"}`

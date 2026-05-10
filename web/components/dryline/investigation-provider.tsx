@@ -96,7 +96,11 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
         res = await fetch("/api/investigate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: cleanAddress, mode: effectiveMode }),
+          body: JSON.stringify({
+            address: cleanAddress,
+            mode: effectiveMode,
+            headlineStory: location.headlineStory,
+          }),
           signal: ac.signal,
         });
       } catch (err) {

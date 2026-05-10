@@ -40,6 +40,7 @@ export const dynamic = "force-dynamic";
 
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4.1";
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const SYNTHESIS_TIMEOUT_MS = 60_000;
 
 interface CacheEntry {
   buffer: Uint8Array;
@@ -70,33 +71,45 @@ type Mode = "personal" | "transparency";
 
 const MODE_FRAMING: Record<Mode, string> = {
   personal:
-    "Mode: PERSONAL. The user is asking about their own situation at this address. Address them directly. Default artifact kind: watering_reminder or well_outlook_briefing. Avoid systemic editorializing unless the data forces it.",
+    "Mode: PERSONAL. The user is asking about their own situation at this address. Address them directly (\"your address\", \"your utility\"). Default artifact kind: watering_reminder when drought / utility action dominates, or well_outlook_briefing when groundwater / private-well stress dominates. Lead the synthesis with the lived-experience hook — typically the aquifer trend at the nearest monitoring well, then drinking-water status, then drought stage and what it forbids.",
   transparency:
-    "Mode: TRANSPARENCY. The user is asking about systemic patterns at or near this address — large permitted users, regulatory context, historical pressure on the watershed. Default artifact kind: public_comment (when the data points to a permittee worth scrutinizing) or gcd_letter / pia_request (when groundwater or missing-data concerns dominate).",
+    "Mode: TRANSPARENCY. The user is asking about systemic patterns at or near this address — large permitted users, regulatory context, historical pressure on the watershed. Lead with a TENSION FLAG that pairs two facts (e.g., 'reservoir below historical average AND large permitted draw nearby'). Default artifact kind: public_comment when the data points to a specific permittee worth scrutinizing (cite the NPDES permit ID from get_big_users_nearby in the body — do not invent docket numbers; if no specific open comment window is known, include 'verify the comment window is open at echo.epa.gov/detailed-facility-report' in the draft); gcd_letter when groundwater stress + a named GCD is in scope; pia_request when the gap in public data is itself the story.",
 };
 
-const SYNTHESIS_INSTRUCTIONS = (mode: Mode) => `# Runtime instructions for this synthesis
+const SYNTHESIS_INSTRUCTIONS = (mode: Mode, headlineStory: string | null) =>
+  `# Runtime instructions for this synthesis
 
 You are running inside the Dryline web app's investigation flow. ${MODE_FRAMING[mode]}
 
-The five MVP tools have ALREADY been run for this address; their full ToolResult shapes (data + caveats + sources) are provided below. Do not call any tools — only synthesize.
+${
+  headlineStory
+    ? `Background context the user came in with (treat as the framing, land it concretely in the data):\n> ${headlineStory}\n\n`
+    : ""
+}The MVP tools (resolve_location, get_drought_status, get_reservoirs, get_drinking_water, get_big_users_nearby, and get_aquifer_status when the address is in a covered demo county) have ALREADY been run for this address; their full ToolResult shapes (data + caveats + sources) are provided below. Do not call any tools — only synthesize.
 
 Emit your final assistant text in EXACTLY this structure:
 
 \`\`\`
 # Synthesis
 
-<2–4 short paragraphs. Every fact-bearing sentence cites a source from a tool's sources[] using inline markdown links [Source Title](url). End with the required Dryline disclaimer paragraph.>
+<2–4 short paragraphs, ~120–280 words total. Every fact-bearing sentence cites a source from a tool's sources[] using inline markdown links [Source Title](url). End with the required Dryline disclaimer paragraph.>
 
 ---
 # Action artifact
 KIND: <one of: public_comment | watering_reminder | gcd_letter | well_outlook_briefing | pia_request | weekly_briefing>
 TITLE: <short title, no markdown>
 BODY:
-<the drafted artifact, markdown allowed. Include "Review before sending." at the top if the artifact is intended for a third party.>
+<the drafted artifact, markdown allowed, ~120–250 words. Include "Review before sending." at the top if the artifact is intended for a third party.>
 \`\`\`
 
-Hard rules: never claim causation; never predict personal impact; never overclaim. If a tool returned \`data: null\` or its caveats include a 'quality' severity 'error', say so explicitly in the synthesis and continue with what you do have. Cite at least three distinct sources inline.`;
+Hard rules — every one is non-negotiable:
+1. Never claim causation. "Aquifer is declining AND a permit was filed nearby" is a flagged tension, not a causal claim.
+2. Never predict personal impact. Do NOT use "your well may run dry," "your water could become unsafe," "your property value may fall," or any probabilistic-future-tense phrasing. State the data. Let the user interpret.
+3. Avoid hedging language: "could be," "might affect," "may impact," "appears to suggest." If the data is uncertain, that uncertainty belongs in a structured caveat, not in fuzzy synthesis prose.
+4. If get_aquifer_status returned a monitoring well: lead the synthesis with the trend ("the nearest TWDB monitoring well — <stateWellId>, <distance> mi away in the <aquifer> — has shown depth-to-water moving <X> ft/yr over the last decade"). Note that a single well does not speak for the whole aquifer.
+5. For public_comment artifacts, cite the actual NPDES permit ID(s) from get_big_users_nearby. Do not invent TCEQ docket numbers.
+6. If a tool returned \`data: null\` or its caveats include a 'quality' severity 'error', say so explicitly in the synthesis and continue with what you do have.
+7. Cite at least three distinct sources inline.`;
 
 interface DispatchResult {
   toolResult: ToolResult<unknown>;
@@ -289,6 +302,7 @@ interface InvestigationCompletion {
 async function runInvestigation(
   address: string,
   mode: Mode,
+  headlineStory: string | null,
   writer: StreamWriter,
 ): Promise<InvestigationCompletion> {
   if (!process.env.OPENAI_API_KEY) {
@@ -307,8 +321,8 @@ async function runInvestigation(
     | null;
   const resolveOk = resolvedData != null;
 
-  // Phase 2: parallel-fetch the four follow-on tools, deterministically.
-  // We emit tool_start/tool_result as each resolves so the trace still
+  // Phase 2: parallel-fetch the follow-on tools, deterministically. We
+  // emit tool_start/tool_result as each resolves so the trace still
   // streams in real time. If resolve_location failed, fall back to a
   // best-effort run with the published label (most tools require lat/lng
   // or countyFips and will surface their own error caveats — that's OK,
@@ -335,13 +349,27 @@ async function runInvestigation(
         writer,
         collected,
       ),
+      dispatchAndEmit(
+        "get_aquifer_status",
+        { lat, lng, radiusMi: 20 },
+        writer,
+        collected,
+      ),
     ]);
   }
 
   // Phase 3: synthesis-only model call.
   const skill = await getSkillPrompt();
+  const TOOL_ORDER = [
+    "resolve_location",
+    "get_drought_status",
+    "get_reservoirs",
+    "get_drinking_water",
+    "get_big_users_nearby",
+    "get_aquifer_status",
+  ];
   const labeledResults = collected.map((r, i) => ({
-    name: ["resolve_location", "get_drought_status", "get_reservoirs", "get_drinking_water", "get_big_users_nearby"][i] ?? "tool",
+    name: TOOL_ORDER[i] ?? "tool",
     result: r,
   }));
 
@@ -352,19 +380,33 @@ Tool results (already gathered for you):
 ${formatToolResultsForSynthesis(labeledResults)}`;
 
   const input: ResponseInput = [
-    { role: "system", content: `${skill}\n\n---\n\n${SYNTHESIS_INSTRUCTIONS(mode)}` },
+    {
+      role: "system",
+      content: `${skill}\n\n---\n\n${SYNTHESIS_INSTRUCTIONS(mode, headlineStory)}`,
+    },
     { role: "user", content: userMessage },
   ];
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // Hard timeout on the synthesis call. We've seen single OpenAI calls hang
+  // for 2–3 minutes on otherwise-normal requests — unacceptable for a live
+  // demo. Abort and emit a graceful error if the model has not finished
+  // streaming within the budget.
+  const ac = new AbortController();
+  const timeoutId = setTimeout(() => ac.abort(), SYNTHESIS_TIMEOUT_MS);
+
   let stream: AsyncIterable<ResponseStreamEvent>;
   try {
-    stream = (await client.responses.create({
-      model: MODEL,
-      input,
-      stream: true,
-    })) as unknown as AsyncIterable<ResponseStreamEvent>;
+    stream = (await client.responses.create(
+      {
+        model: MODEL,
+        input,
+        stream: true,
+      },
+      { signal: ac.signal },
+    )) as unknown as AsyncIterable<ResponseStreamEvent>;
   } catch (err) {
+    clearTimeout(timeoutId);
     const message = err instanceof Error ? err.message : String(err);
     writer.emit("error", { message: `OpenAI call failed: ${message}` });
     writer.emit("done", {});
@@ -373,20 +415,44 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
   }
 
   let finalText = "";
-  for await (const event of stream) {
-    switch (event.type) {
-      case "response.output_text.delta":
-        finalText += event.delta;
-        break;
-      case "error": {
-        const message = (event as unknown as { error?: { message?: string }; message?: string })
-          .error?.message ?? (event as unknown as { message?: string }).message ?? "OpenAI stream error";
-        writer.emit("error", { message });
-        break;
+  let timedOut = false;
+  try {
+    for await (const event of stream) {
+      switch (event.type) {
+        case "response.output_text.delta":
+          finalText += event.delta;
+          break;
+        case "error": {
+          const message = (event as unknown as { error?: { message?: string }; message?: string })
+            .error?.message ?? (event as unknown as { message?: string }).message ?? "OpenAI stream error";
+          writer.emit("error", { message });
+          break;
+        }
+        default:
+          break;
       }
-      default:
-        break;
     }
+  } catch (err) {
+    if (ac.signal.aborted) {
+      timedOut = true;
+    } else {
+      clearTimeout(timeoutId);
+      const message = err instanceof Error ? err.message : String(err);
+      writer.emit("error", { message: `Stream error: ${message}` });
+      writer.emit("done", {});
+      writer.close();
+      return { cacheable: false };
+    }
+  }
+  clearTimeout(timeoutId);
+
+  if (timedOut) {
+    writer.emit("error", {
+      message: `Synthesis exceeded ${SYNTHESIS_TIMEOUT_MS / 1000}s. OpenAI is slow right now — retry in a few seconds, or hit cache from a prior run.`,
+    });
+    writer.emit("done", {});
+    writer.close();
+    return { cacheable: false };
   }
 
   if (!finalText) {
@@ -408,17 +474,27 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
 export async function POST(req: Request): Promise<Response> {
   let address: string;
   let mode: Mode = "personal";
+  let headlineStory: string | null = null;
   try {
-    const body = (await req.json()) as { address?: unknown; mode?: unknown };
+    const body = (await req.json()) as {
+      address?: unknown;
+      mode?: unknown;
+      headlineStory?: unknown;
+    };
     if (typeof body.address !== "string" || body.address.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "Body must be { address: string, mode?: 'personal'|'transparency' }" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Body must be { address: string, mode?: 'personal'|'transparency', headlineStory?: string }",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
     }
     address = body.address.trim();
     if (body.mode === "transparency" || body.mode === "personal") {
       mode = body.mode;
+    }
+    if (typeof body.headlineStory === "string" && body.headlineStory.trim().length > 0) {
+      headlineStory = body.headlineStory.trim();
     }
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
@@ -451,7 +527,7 @@ export async function POST(req: Request): Promise<Response> {
       const writer = new StreamWriter(controller);
       let okToCache = true;
       try {
-        const completion = await runInvestigation(address, mode, writer);
+        const completion = await runInvestigation(address, mode, headlineStory, writer);
         okToCache = completion.cacheable;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

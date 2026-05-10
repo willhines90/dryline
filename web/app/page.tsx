@@ -233,14 +233,13 @@ function DemoAddressList({
               <div className="flex items-baseline justify-between gap-2">
                 <div className="dryline-label truncate">{loc.region}</div>
                 {loc.live ? (
-                  <span className="font-mono text-[8.5px] tracking-[0.18em] text-ink border border-ink px-1.5 py-px shrink-0">
-                    LIVE
+                  <span
+                    title="One of the three live-demo addresses we've rehearsed for the cinematic trio."
+                    className="font-mono text-[8.5px] tracking-[0.18em] text-aquifer border border-aquifer/60 px-1.5 py-px shrink-0"
+                  >
+                    DEMO TRIO
                   </span>
-                ) : (
-                  <span className="font-mono text-[8.5px] tracking-[0.18em] text-tideline border border-rule px-1.5 py-px shrink-0">
-                    CHAMBER
-                  </span>
-                )}
+                ) : null}
               </div>
 
               <div className="font-serif text-[16px] leading-tight tracking-[-0.008em] mt-1 text-ink">

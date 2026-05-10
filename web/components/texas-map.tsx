@@ -188,10 +188,13 @@ export function TexasMap({
           zoom: 5.25,
           minZoom: 4.25,
           maxZoom: 14,
-          attributionControl: { compact: true },
+          attributionControl: false,
         });
         mapRef.current = map;
-        map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
+        // Attribution moved to top-right (compact "i") so it doesn't sit
+        // on top of our bottom-right LayerControl. NavigationControl
+        // (zoom +/-) intentionally omitted — uncluttered demo chrome.
+        map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
 
         map.on("error", (e) => {
           // eslint-disable-next-line no-console

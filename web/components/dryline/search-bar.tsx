@@ -248,7 +248,7 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
       {open && candidates.length === 0 && q.trim() ? (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-[100]">
           <div className="px-3 py-2.5 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
-            No staged match · run live
+            Free-text address
           </div>
           <button
             type="button"
@@ -260,18 +260,18 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
           >
             <div className="flex justify-between items-baseline gap-2">
               <span className="font-serif text-[14.5px] font-medium text-ink">
-                Investigate &ldquo;{q.trim()}&rdquo; live
+                Investigate &ldquo;{q.trim()}&rdquo;
               </span>
               <span className="font-mono text-[8.5px] tracking-[0.16em] text-aquifer border border-aquifer/60 px-1.5 py-px">
-                LIVE ↗
+                RUN ↗
               </span>
             </div>
             <div className="text-[11.5px] text-tideline mt-0.5">
-              Resolve via Nominatim + Census; run all 8 tools against real public APIs.
+              Resolves the address via Nominatim + Census, then fans out all 8 tools against real public APIs. Tip: include city + county for the most reliable resolution.
             </div>
           </button>
           <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.16em] text-tideline border-t border-rule">
-            ↵ run live · esc close
+            ↵ run · esc close
           </div>
         </div>
       ) : null}
@@ -301,8 +301,26 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
                 <span className="font-serif text-[14.5px] font-medium leading-tight">
                   {c.label}
                 </span>
-                <span className="shrink-0 font-mono text-[8.5px] tracking-[0.16em] text-tideline border border-rule px-1.5 py-px">
-                  {c.kind === "staged" ? (c.live ? "LIVE" : "CHAMBER") : "KNOWN"}
+                <span
+                  title={
+                    c.kind === "staged"
+                      ? c.live
+                        ? "One of three rehearsed live-demo addresses."
+                        : "Pre-staged demo address with curated narrative."
+                      : "Known Texas city — runs a real live investigation against public APIs."
+                  }
+                  className={cn(
+                    "shrink-0 font-mono text-[8.5px] tracking-[0.16em] px-1.5 py-px border",
+                    c.kind === "staged" && c.live
+                      ? "text-aquifer border-aquifer/60"
+                      : "text-tideline border-rule",
+                  )}
+                >
+                  {c.kind === "staged"
+                    ? c.live
+                      ? "DEMO TRIO"
+                      : "STAGED"
+                    : "KNOWN CITY"}
                 </span>
               </div>
               <div className="text-[11.5px] text-tideline mt-0.5">{c.sub}</div>

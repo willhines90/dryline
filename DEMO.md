@@ -119,7 +119,7 @@ If you forget everything else, land these four:
 | Map fails to load tiles | Switch to a screenshot fallback (in `/fixtures/screenshots/`). | "Map tiles being slow. The data we care about is in the side rail." |
 | Reasoning trace stalls | Wait two seconds. If still stalled, click into Actions tab and present the drafted artifact. | "While the agent finishes, here's what it produced last time we ran this address." |
 | Address resolves to wrong place | Use the demo button instead of typing. | "Demo button is the safe path." |
-| Audio/projector dies | Pick up at slide 9 verbally; describe one drafted artifact from memory. | "Briefly without slides — Dryline ships an MCP server, an agent skill, and a map app. Every claim cites a source. Every investigation drafts a civic action." |
+| Audio/projector dies | Pick up at slide 10 verbally; describe one drafted artifact from memory. | "Briefly without slides — Dryline ships an MCP server, an agent skill, and a map app. Every claim cites a source. Every investigation drafts a civic action." |
 
 ---
 

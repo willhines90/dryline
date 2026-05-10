@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DemoLocation } from "@/lib/types";
 import type { StyleSpecification } from "maplibre-gl";
 
@@ -64,70 +64,69 @@ export function TexasMap({ locations, focusedLocation }: TexasMapProps) {
   const mapRef = useRef<MapInstance | null>(null);
   const markersRef = useRef<Array<{ marker: MarkerInstance; popup: PopupInstance }>>([]);
   const mapReadyRef = useRef(false);
+  const [mountError, setMountError] = useState<string | null>(null);
+  const [tilesFailing, setTilesFailing] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) {
-      return;
-    }
-
+    if (!containerRef.current || mapRef.current) return;
     let cancelled = false;
 
     async function mountMap() {
-      const maplibregl = await import("maplibre-gl");
-      if (cancelled || !containerRef.current) {
-        return;
-      }
+      try {
+        const maplibregl = await import("maplibre-gl");
+        if (cancelled || !containerRef.current) return;
 
-      const map = new maplibregl.Map({
-        container: containerRef.current,
-        style: TOPO_STYLE,
-        center: [-99.2, 31.1],
-        zoom: 5.25,
-        minZoom: 4.25,
-        maxZoom: 14,
-      });
-
-      mapRef.current = map;
-      map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-
-      map.on("load", () => {
-        map.fitBounds(TEXAS_BOUNDS, { padding: 36, duration: 0 });
-        mapReadyRef.current = true;
-
-        locations.forEach((location) => {
-          if (!location.approxLatLng) {
-            return;
-          }
-
-          const markerNode = document.createElement("button");
-          markerNode.type = "button";
-          markerNode.setAttribute("aria-label", location.label);
-          markerNode.className =
-            "h-3.5 w-3.5 rounded-full border-2 border-arid-50 bg-reservoir-500 shadow-[0_0_0_6px_rgba(250,246,238,0.22)] transition-transform";
-
-          const popup = new maplibregl.Popup({
-            offset: 18,
-            closeButton: false,
-            closeOnClick: false,
-          }).setHTML(buildPopupMarkup(location));
-
-          const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
-            .setLngLat([location.approxLatLng.lng, location.approxLatLng.lat])
-            .addTo(map);
-
-          markerNode.addEventListener("mouseenter", () => {
-            popup.setLngLat([location.approxLatLng!.lng, location.approxLatLng!.lat]).addTo(map);
-            markerNode.style.transform = "scale(1.15)";
-          });
-
-          markerNode.addEventListener("mouseleave", () => {
-            popup.remove();
-            markerNode.style.transform = "scale(1)";
-          });
-
-          markersRef.current.push({ marker, popup });
+        const map = new maplibregl.Map({
+          container: containerRef.current,
+          style: TOPO_STYLE,
+          center: [-99.2, 31.1],
+          zoom: 5.25,
+          minZoom: 4.25,
+          maxZoom: 14,
         });
-      });
+        mapRef.current = map;
+        map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+
+        map.on("error", (e) => {
+          // eslint-disable-next-line no-console
+          console.warn("[TexasMap] tile/source error:", e?.error ?? e);
+          setTilesFailing(true);
+        });
+
+        map.on("load", () => {
+          map.fitBounds(TEXAS_BOUNDS, { padding: 36, duration: 0 });
+          mapReadyRef.current = true;
+          for (const location of locations) {
+            if (!location.approxLatLng) continue;
+            const markerNode = document.createElement("button");
+            markerNode.type = "button";
+            markerNode.setAttribute("aria-label", location.label);
+            markerNode.className =
+              "h-3.5 w-3.5 rounded-full border-2 border-arid-50 bg-reservoir-500 shadow-[0_0_0_6px_rgba(250,246,238,0.22)] transition-transform";
+            const popup = new maplibregl.Popup({
+              offset: 18,
+              closeButton: false,
+              closeOnClick: false,
+            }).setHTML(buildPopupMarkup(location));
+            const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
+              .setLngLat([location.approxLatLng.lng, location.approxLatLng.lat])
+              .addTo(map);
+            markerNode.addEventListener("mouseenter", () => {
+              popup.setLngLat([location.approxLatLng!.lng, location.approxLatLng!.lat]).addTo(map);
+              markerNode.style.transform = "scale(1.15)";
+            });
+            markerNode.addEventListener("mouseleave", () => {
+              popup.remove();
+              markerNode.style.transform = "scale(1)";
+            });
+            markersRef.current.push({ marker, popup });
+          }
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[TexasMap] mount failed:", err);
+        setMountError(err instanceof Error ? err.message : String(err));
+      }
     }
 
     mountMap();
@@ -145,8 +144,7 @@ export function TexasMap({ locations, focusedLocation }: TexasMapProps) {
     };
   }, [locations]);
 
-  // Drive the camera from `focusedLocation`. flyTo when set; reset to bounds
-  // when cleared.
+  // Drive the camera from focusedLocation. flyTo when set; reset to bounds when cleared.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -168,14 +166,24 @@ export function TexasMap({ locations, focusedLocation }: TexasMapProps) {
 
   return (
     <div className="relative h-full min-h-[420px] overflow-hidden bg-reservoir-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(238,244,247,0.55),transparent_55%),linear-gradient(180deg,rgba(15,38,50,0.08),transparent_28%)]" />
-      <div ref={containerRef} className="dryline-map h-full w-full" />
+      <div ref={containerRef} className="dryline-map absolute inset-0" />
       <div className="pointer-events-none absolute left-5 top-5 max-w-xs rounded-md border border-border/80 bg-card/90 px-4 py-3 backdrop-blur-sm">
         <p className="font-serif text-sm text-reservoir-700">Texas basemap</p>
         <p className="mt-1 text-xs text-muted-foreground">
           OpenTopoMap tiles with the seven demo locations staged for the investigation flow.
         </p>
       </div>
+      {mountError ? (
+        <div className="absolute inset-x-6 bottom-6 rounded-md border border-red-300 bg-red-50/95 px-4 py-3 text-xs text-red-900 shadow-md">
+          <div className="font-semibold uppercase tracking-[0.18em] mb-1">Map failed to mount</div>
+          <div className="font-mono">{mountError}</div>
+        </div>
+      ) : tilesFailing ? (
+        <div className="absolute inset-x-6 bottom-6 rounded-md border border-amber-300 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 shadow-md">
+          Basemap tile source returned an error (probably an upstream rate-limit). The map view
+          may show fewer tiles than expected. Markers are still positioned correctly.
+        </div>
+      ) : null}
     </div>
   );
 }

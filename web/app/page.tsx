@@ -45,7 +45,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
   const headerMode = mode ?? "personal";
 
   return (
-    <main className="min-h-screen flex flex-col">
+    <main className="min-h-screen flex flex-col overflow-x-hidden">
       <header className="border-b border-border px-6 py-4 flex items-baseline justify-between bg-background">
         <div>
           <h1 className="font-serif text-2xl tracking-tight">Dryline</h1>
@@ -58,11 +58,11 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
         </nav>
       </header>
 
-      <section className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0">
-        <div className="lg:col-span-8 border-b border-border lg:border-b-0">
+      <section className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 min-h-0">
+        <div className="lg:col-span-8 min-w-0 border-b border-border lg:border-b-0 relative">
           <TexasMap locations={locations} focusedLocation={focused} />
         </div>
-        <aside className="lg:col-span-4 border-l-0 lg:border-l border-border bg-background flex flex-col">
+        <aside className="lg:col-span-4 min-w-0 border-l-0 lg:border-l border-border bg-background flex flex-col overflow-hidden">
           {active ? (
             <InvestigationPanel />
           ) : (
@@ -89,7 +89,7 @@ function DemoAddressList({ locations }: { locations: DemoLocationWithCoords[] })
   // Per-location mode override; defaults to fixture mode.
   const [modeByLoc, setModeByLoc] = React.useState<Record<string, Mode>>({});
   return (
-    <div className="p-6 space-y-4 overflow-y-auto">
+    <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
       <h2 className="font-serif text-lg">Demo addresses</h2>
       <p className="text-xs text-muted-foreground">
         Pre-staged for the live demo. Click <strong>Investigate</strong> to start an autonomous

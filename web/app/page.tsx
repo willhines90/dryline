@@ -1,16 +1,14 @@
 /**
  * Dryline — landing / investigation surface.
  *
- * Layout pulled from the Claude Design bundle: top bar (logo + lede +
- * search + mode toggle), 62/38 split (map left, panel right), status
- * footer pinned at the bottom. The cinematic flow:
+ * Layout: top bar (logo + lede + search + global mode + compare toggle),
+ * 62/38 split (map left, panel right), status footer pinned bottom.
  *
- *   click Investigate (or pick a search result)
- *     → map flies to the address
- *     → ReasoningTrace streams tool calls in
- *     → SynthesisCard renders the cited synthesis
- *     → ActionsTab slide handle pulses; user opens it for the artifact
- *       (public comment / watering reminder / GCD letter / etc.).
+ * Compare-mode (Phase 4.6 §3): when on, the right panel splits into two
+ * stacked InvestigationPanel instances — primary on top, secondary
+ * underneath, with a ComparisonHero strip above both once both finish.
+ * Each demo card's Investigate button decides where to drop the new
+ * investigation based on which slot is empty.
  */
 
 "use client";
@@ -21,7 +19,10 @@ import demoAddresses from "../../fixtures/demo-addresses.json";
 import { TexasMap } from "@/components/texas-map";
 import {
   InvestigationProvider,
+  SlotCtx,
   useInvestigation,
+  useMultiInvestigation,
+  type Slot,
 } from "@/components/dryline/investigation-provider";
 import { InvestigateButton, ModeToggle } from "@/components/dryline/investigate-button";
 import { ReasoningTrace } from "@/components/dryline/reasoning-trace";
@@ -31,7 +32,10 @@ import { DrylineLogo } from "@/components/dryline/dryline-logo";
 import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
 import { StatusFooter } from "@/components/dryline/status-footer";
+import { CompareToggle } from "@/components/dryline/compare-toggle";
+import { ComparisonHero } from "@/components/dryline/comparison-hero";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   const locations = (demoAddresses.locations as DemoLocationWithCoords[]).filter(
@@ -45,16 +49,16 @@ export default function HomePage() {
 }
 
 function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
-  const { location: active, mode, status, start } = useInvestigation();
-  const focused = active ?? null;
+  const { primary, secondary, compareMode, startNextAvailable } = useMultiInvestigation();
+  const focused = primary.location ?? secondary.location ?? null;
   const [globalMode, setGlobalMode] = React.useState<Mode>("personal");
-  const headerMode = mode ?? globalMode;
 
-  // SearchBar pick → fire investigation directly.
   const handleSearchPick = React.useCallback(
-    (loc: DemoLocationWithCoords) => start(loc, loc.mode ?? globalMode),
-    [start, globalMode],
+    (loc: DemoLocationWithCoords) => startNextAvailable(loc, loc.mode ?? globalMode),
+    [startNextAvailable, globalMode],
   );
+
+  const anyActive = primary.location || secondary.location;
 
   return (
     <main className="min-h-screen flex flex-col overflow-x-hidden bg-background">
@@ -71,13 +75,14 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
               Investigate Texas water at any address.
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <SearchBar
               staged={locations}
               onPick={handleSearchPick}
-              activeLabel={active?.label ?? null}
+              activeLabel={primary.location?.label ?? null}
             />
-            <ModeToggle value={headerMode} onChange={setGlobalMode} />
+            <ModeToggle value={globalMode} onChange={setGlobalMode} />
+            <CompareToggle />
           </div>
         </div>
       </header>
@@ -87,21 +92,76 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
           <TexasMap locations={locations} focusedLocation={focused} />
         </div>
         <aside className="lg:col-span-4 min-w-0 border-l-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
-          {active ? (
-            <InvestigationPanel />
-          ) : (
+          {!anyActive ? (
             <DemoAddressList locations={locations} globalMode={globalMode} />
+          ) : (
+            <CompareOrSinglePanels />
           )}
         </aside>
       </section>
 
       <StatusFooter />
 
-      {/* Slide-in artifact panel; renders nothing until artifact arrives. */}
+      {/* Slide-in artifact panel; reads from PRIMARY only (single artifact at a time). */}
       <ActionsTab />
-
-      {status === "error" ? <ErrorToast /> : null}
     </main>
+  );
+}
+
+/**
+ * Renders the right-side panel. In single-mode: just the primary
+ * InvestigationPanel. In compare-mode: ComparisonHero + primary panel +
+ * secondary slot (panel or "pick a second" prompt).
+ */
+function CompareOrSinglePanels() {
+  const { compareMode, primary, secondary } = useMultiInvestigation();
+
+  if (!compareMode) {
+    return (
+      <SlotCtx.Provider value="primary">
+        <InvestigationPanel />
+      </SlotCtx.Provider>
+    );
+  }
+
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      {primary.score && secondary.score ? (
+        <div className="px-6 pt-5">
+          <ComparisonHero />
+        </div>
+      ) : null}
+
+      <div className="divide-y divide-rule">
+        <SlotCtx.Provider value="primary">
+          <CompareSlotPanel slot="primary" />
+        </SlotCtx.Provider>
+        <SlotCtx.Provider value="secondary">
+          <CompareSlotPanel slot="secondary" />
+        </SlotCtx.Provider>
+      </div>
+    </div>
+  );
+}
+
+function CompareSlotPanel({ slot }: { slot: Slot }) {
+  const slotApi = useInvestigation();
+  if (!slotApi.location) {
+    return <SlotPlaceholder slot={slot} />;
+  }
+  return <InvestigationPanel compact slotLabel={slot} />;
+}
+
+function SlotPlaceholder({ slot }: { slot: Slot }) {
+  return (
+    <div className="px-6 py-6">
+      <div className="dryline-label">{slot === "primary" ? "Primary" : "Secondary"}</div>
+      <p className="font-serif italic text-tideline text-[14px] mt-2">
+        {slot === "secondary"
+          ? "Pick a second address from the map or search to compare."
+          : "Pick a primary address to start the comparison."}
+      </p>
+    </div>
   );
 }
 
@@ -112,17 +172,28 @@ function DemoAddressList({
   locations: DemoLocationWithCoords[];
   globalMode: Mode;
 }) {
+  const { compareMode, primary, secondary, startNextAvailable } = useMultiInvestigation();
   const [modeByLoc, setModeByLoc] = React.useState<Record<string, Mode>>({});
+
+  const nextSlotHint: Slot | null = !compareMode
+    ? null
+    : !primary.location
+    ? "primary"
+    : !secondary.location
+    ? "secondary"
+    : null;
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
       <div>
         <div className="dryline-label">Demo addresses</div>
         <h2 className="font-serif text-[26px] leading-tight tracking-[-0.008em] mt-1">
-          Pick an address to investigate.
+          {compareMode ? "Pick two addresses to compare." : "Pick an address to investigate."}
         </h2>
         <p className="font-serif italic text-tideline text-[15px] mt-2">
-          Pre-staged for the live demo. Investigation streams in real time — every claim cites a public source.
+          {compareMode
+            ? "Two parallel investigations, scored side by side. The contrast is the demo moment."
+            : "Pre-staged for the live demo. Investigation streams in real time — every claim cites a public source."}
         </p>
       </div>
 
@@ -155,8 +226,28 @@ function DemoAddressList({
                 {loc.headlineStory}
               </p>
 
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <InvestigateButton location={loc} mode={currentMode} />
+              <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+                {compareMode ? (
+                  <button
+                    type="button"
+                    onClick={() => startNextAvailable(loc, currentMode)}
+                    disabled={nextSlotHint === null}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-3.5 py-2 border bg-ink text-paper border-ink",
+                      "font-mono text-[10.5px] tracking-[0.18em] uppercase transition-colors",
+                      "hover:bg-aquifer hover:border-aquifer disabled:opacity-50 disabled:cursor-not-allowed",
+                    )}
+                  >
+                    {nextSlotHint === "secondary"
+                      ? "→ Secondary"
+                      : nextSlotHint === "primary"
+                      ? "→ Primary"
+                      : "Both filled"}
+                    <span aria-hidden>→</span>
+                  </button>
+                ) : (
+                  <InvestigateButton location={loc} mode={currentMode} />
+                )}
                 <ModeToggle
                   value={currentMode}
                   onChange={(m) => setModeByLoc((s) => ({ ...s, [loc.id]: m }))}
@@ -170,19 +261,26 @@ function DemoAddressList({
   );
 }
 
-function InvestigationPanel() {
+interface InvestigationPanelProps {
+  compact?: boolean;
+  slotLabel?: Slot;
+}
+
+function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
   const { location, mode, status, reset, error, score } = useInvestigation();
   if (!location) return null;
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+    <div className={cn("flex flex-col", compact ? "" : "flex-1 min-h-0 overflow-y-auto")}>
       <header className="px-6 pt-5 pb-4 border-b border-rule">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="dryline-label">Investigating</div>
-            <h2 className="font-serif text-[26px] leading-[1.1] tracking-[-0.008em] mt-1 truncate text-ink">
+            <div className="dryline-label">
+              {slotLabel ? `${slotLabel === "primary" ? "Primary" : "Secondary"} · investigating` : "Investigating"}
+            </div>
+            <h2 className="font-serif text-[24px] leading-[1.1] tracking-[-0.008em] mt-1 truncate text-ink">
               {location.label}
             </h2>
-            <div className="font-serif italic text-[14.5px] text-tideline mt-1">
+            <div className="font-serif italic text-[14px] text-tideline mt-1">
               {(mode ?? "personal") === "personal"
                 ? "Will the water last here?"
                 : "Who's drinking your aquifer?"}
@@ -191,43 +289,40 @@ function InvestigationPanel() {
           <button
             type="button"
             onClick={reset}
-            className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors"
+            className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors shrink-0"
             aria-label="Reset investigation"
           >
             Reset ↺
           </button>
         </div>
         <div className="mt-3 flex items-center gap-3 font-mono text-[10px] tracking-[0.18em] uppercase">
-          <span
-            className={
-              status === "streaming"
-                ? "text-aquifer flex items-center gap-1.5"
-                : status === "done"
-                ? "text-kelp flex items-center gap-1.5"
-                : status === "error"
-                ? "text-rust flex items-center gap-1.5"
-                : "text-tideline flex items-center gap-1.5"
-            }
-          >
+          <span className="flex items-center gap-1.5">
             <span
               aria-hidden
-              className={`w-1.5 h-1.5 rounded-full ${
-                status === "streaming"
-                  ? "bg-aquifer animate-dryline-pulse"
-                  : status === "done"
-                  ? "bg-kelp"
-                  : status === "error"
-                  ? "bg-rust"
-                  : "bg-tideline"
-              }`}
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                status === "streaming" && "bg-aquifer animate-dryline-pulse",
+                status === "done" && "bg-kelp",
+                status === "error" && "bg-rust",
+                status === "idle" && "bg-tideline",
+              )}
             />
-            {status === "streaming"
-              ? "Streaming"
-              : status === "done"
-              ? "Done"
-              : status === "error"
-              ? "Error"
-              : "Idle"}
+            <span
+              className={cn(
+                status === "streaming" && "text-aquifer",
+                status === "done" && "text-kelp",
+                status === "error" && "text-rust",
+                status === "idle" && "text-tideline",
+              )}
+            >
+              {status === "streaming"
+                ? "Streaming"
+                : status === "done"
+                ? "Done"
+                : status === "error"
+                ? "Error"
+                : "Idle"}
+            </span>
           </span>
           {error ? <span className="text-rust normal-case tracking-normal">{error}</span> : null}
         </div>
@@ -243,26 +338,6 @@ function InvestigationPanel() {
           <SynthesisCard />
         </section>
       </div>
-    </div>
-  );
-}
-
-function ErrorToast() {
-  const { error, reset } = useInvestigation();
-  if (!error) return null;
-  return (
-    <div className="fixed bottom-12 left-4 z-40 max-w-md border border-rust bg-background px-4 py-3 text-xs text-ink shadow-paper">
-      <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-rust mb-1">
-        Investigation error
-      </div>
-      <div className="mb-2 leading-snug font-serif">{error}</div>
-      <button
-        type="button"
-        onClick={reset}
-        className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink underline underline-offset-2"
-      >
-        Dismiss
-      </button>
     </div>
   );
 }

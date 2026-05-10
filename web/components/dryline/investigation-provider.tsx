@@ -1,16 +1,26 @@
 "use client";
 
 /**
- * InvestigationProvider — single source of truth for the cinematic
- * investigation flow on the right panel and the map's focus state.
+ * InvestigationProvider — holds up to TWO active investigations.
  *
- * One investigation runs at a time. Starting a new one cancels any
- * in-flight stream by aborting its fetch. State machine:
+ * Single-mode (default): only the `primary` slot is in use; existing
+ * components see exactly the same API as before.
  *
- *   idle → streaming → done
- *                    ↘ error
+ * Compare-mode: both `primary` and `secondary` are in use. The two-panel
+ * layout in page.tsx wraps each side in a SlotCtx that tells
+ * useInvestigation() which slot to read.
  *
- *   reset() returns to idle from any state and clears traces.
+ *   <InvestigationProvider>
+ *     <SlotCtx.Provider value="primary">
+ *       <InvestigationPanel />        // useInvestigation() reads primary
+ *     </SlotCtx.Provider>
+ *     <SlotCtx.Provider value="secondary">
+ *       <InvestigationPanel />        // useInvestigation() reads secondary
+ *     </SlotCtx.Provider>
+ *   </InvestigationProvider>
+ *
+ * Each slot runs an independent fetch + SSE stream; the two streams
+ * are multiplexed client-side, no server-side coordination.
  */
 
 import * as React from "react";
@@ -24,10 +34,11 @@ import type {
   TraceEvent,
 } from "@/lib/types";
 
+export type Slot = "primary" | "secondary";
+
 interface InvestigationState {
   status: InvestigationStatus;
   location: DemoLocationWithCoords | null;
-  /** Mode used by the active or just-finished investigation. */
   mode: Mode | null;
   traces: TraceEvent[];
   synthesis: SynthesisPayload | null;
@@ -36,10 +47,19 @@ interface InvestigationState {
   error: string | null;
 }
 
-interface InvestigationApi extends InvestigationState {
-  /** mode override; defaults to location.mode when omitted. */
-  start(location: DemoLocationWithCoords, mode?: Mode): void;
+export interface SlotApi extends InvestigationState {
+  start(location: DemoLocationWithCoords, modeOverride?: Mode): void;
   reset(): void;
+}
+
+interface MultiApi {
+  primary: SlotApi;
+  secondary: SlotApi;
+  compareMode: boolean;
+  setCompareMode(value: boolean): void;
+  resetAll(): void;
+  /** Open `loc` in the next empty slot when compareMode is on, else primary. */
+  startNextAvailable(location: DemoLocationWithCoords, modeOverride?: Mode): void;
 }
 
 const initialState: InvestigationState = {
@@ -53,110 +73,26 @@ const initialState: InvestigationState = {
   error: null,
 };
 
-const Ctx = React.createContext<InvestigationApi | null>(null);
+const MultiCtx = React.createContext<MultiApi | null>(null);
+const SlotCtx = React.createContext<Slot>("primary");
 
-export function useInvestigation(): InvestigationApi {
-  const api = React.useContext(Ctx);
-  if (!api) throw new Error("useInvestigation must be used inside InvestigationProvider");
+export { SlotCtx };
+
+export function useMultiInvestigation(): MultiApi {
+  const api = React.useContext(MultiCtx);
+  if (!api) throw new Error("useMultiInvestigation must be used inside InvestigationProvider");
   return api;
 }
 
-export function InvestigationProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = React.useState<InvestigationState>(initialState);
-  const abortRef = React.useRef<AbortController | null>(null);
-
-  const reset = React.useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setState(initialState);
-  }, []);
-
-  const start = React.useCallback(
-    async (location: DemoLocationWithCoords, modeOverride?: Mode) => {
-      abortRef.current?.abort();
-      const ac = new AbortController();
-      abortRef.current = ac;
-      const effectiveMode: Mode = modeOverride ?? location.mode;
-      setState({
-        status: "streaming",
-        location,
-        mode: effectiveMode,
-        traces: [],
-        synthesis: null,
-        artifact: null,
-        score: null,
-        error: null,
-      });
-
-      let res: Response;
-      try {
-        // Build a geocoder-friendly address. The label embellishes with
-        // em-dashes and project names that Nominatim ignores; bare
-        // "city, TX" is also ambiguous (e.g. "Taylor, TX" resolves to
-        // Taylor *County* out west, not the city of Taylor in
-        // Williamson). Including the county disambiguates without the
-        // "County" suffix that Nominatim rejects.
-        const cleanAddress = `${location.city}, ${location.county}, TX`;
-        res = await fetch("/api/investigate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            address: cleanAddress,
-            mode: effectiveMode,
-            headlineStory: location.headlineStory,
-            humanScaleHook: location.humanScaleHook,
-          }),
-          signal: ac.signal,
-        });
-      } catch (err) {
-        if (ac.signal.aborted) return;
-        setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
-        return;
-      }
-
-      if (!res.ok || !res.body) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const j = (await res.json()) as { error?: string };
-          if (j?.error) msg = j.error;
-        } catch {
-          /* ignore */
-        }
-        setState((s) => ({ ...s, status: "error", error: msg }));
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          // Parse SSE: events are separated by blank lines.
-          let sep: number;
-          while ((sep = buf.indexOf("\n\n")) !== -1) {
-            const raw = buf.slice(0, sep);
-            buf = buf.slice(sep + 2);
-            handleEvent(raw, setState);
-          }
-        }
-        if (buf.trim()) handleEvent(buf, setState);
-      } catch (err) {
-        if (ac.signal.aborted) return;
-        setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
-      }
-    },
-    [],
-  );
-
-  const value = React.useMemo<InvestigationApi>(
-    () => ({ ...state, start, reset }),
-    [state, start, reset],
-  );
-
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+/**
+ * Reads from the slot specified by the nearest SlotCtx (defaulting to
+ * "primary"). All existing consumers keep working unchanged in
+ * single-mode and Just Work in the secondary panel when wrapped in a
+ * SlotCtx.Provider.
+ */
+export function useInvestigation(): SlotApi {
+  const slot = React.useContext(SlotCtx);
+  return useMultiInvestigation()[slot];
 }
 
 function errorMessage(err: unknown): string {
@@ -217,7 +153,7 @@ function handleEvent(
       return;
     }
     case "score": {
-      const p = payload as Partial<import("@/lib/types").ScorePayload>;
+      const p = payload as Partial<ScorePayload>;
       if (typeof p.score !== "number" || !p.subscores || !p.rationale || !p.methodology) return;
       setState((s) => ({
         ...s,
@@ -262,4 +198,146 @@ function handleEvent(
     default:
       return;
   }
+}
+
+function useSlotState(): {
+  state: InvestigationState;
+  start: SlotApi["start"];
+  reset: () => void;
+} {
+  const [state, setState] = React.useState<InvestigationState>(initialState);
+  const abortRef = React.useRef<AbortController | null>(null);
+
+  const reset = React.useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setState(initialState);
+  }, []);
+
+  const start = React.useCallback<SlotApi["start"]>(
+    async (location, modeOverride) => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      const effectiveMode: Mode = modeOverride ?? location.mode;
+      setState({
+        status: "streaming",
+        location,
+        mode: effectiveMode,
+        traces: [],
+        synthesis: null,
+        artifact: null,
+        score: null,
+        error: null,
+      });
+
+      let res: Response;
+      try {
+        const cleanAddress = `${location.city}, ${location.county}, TX`;
+        res = await fetch("/api/investigate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address: cleanAddress,
+            mode: effectiveMode,
+            headlineStory: location.headlineStory,
+            humanScaleHook: location.humanScaleHook,
+          }),
+          signal: ac.signal,
+        });
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
+        return;
+      }
+
+      if (!res.ok || !res.body) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { error?: string };
+          if (j?.error) msg = j.error;
+        } catch {
+          /* ignore */
+        }
+        setState((s) => ({ ...s, status: "error", error: msg }));
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let sep: number;
+          while ((sep = buf.indexOf("\n\n")) !== -1) {
+            const raw = buf.slice(0, sep);
+            buf = buf.slice(sep + 2);
+            handleEvent(raw, setState);
+          }
+        }
+        if (buf.trim()) handleEvent(buf, setState);
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
+      }
+    },
+    [],
+  );
+
+  return { state, start, reset };
+}
+
+export function InvestigationProvider({ children }: { children: React.ReactNode }) {
+  const primarySlot = useSlotState();
+  const secondarySlot = useSlotState();
+  const [compareMode, setCompareMode] = React.useState(false);
+
+  const primary: SlotApi = React.useMemo(
+    () => ({ ...primarySlot.state, start: primarySlot.start, reset: primarySlot.reset }),
+    [primarySlot.state, primarySlot.start, primarySlot.reset],
+  );
+  const secondary: SlotApi = React.useMemo(
+    () => ({ ...secondarySlot.state, start: secondarySlot.start, reset: secondarySlot.reset }),
+    [secondarySlot.state, secondarySlot.start, secondarySlot.reset],
+  );
+
+  const resetAll = React.useCallback(() => {
+    primarySlot.reset();
+    secondarySlot.reset();
+  }, [primarySlot, secondarySlot]);
+
+  const startNextAvailable = React.useCallback<MultiApi["startNextAvailable"]>(
+    (location, modeOverride) => {
+      if (compareMode) {
+        if (!primarySlot.state.location) {
+          primarySlot.start(location, modeOverride);
+        } else if (!secondarySlot.state.location) {
+          secondarySlot.start(location, modeOverride);
+        } else {
+          // Both slots taken; replace primary (newest takes precedence).
+          primarySlot.start(location, modeOverride);
+        }
+      } else {
+        primarySlot.start(location, modeOverride);
+      }
+    },
+    [compareMode, primarySlot, secondarySlot],
+  );
+
+  const value = React.useMemo<MultiApi>(
+    () => ({
+      primary,
+      secondary,
+      compareMode,
+      setCompareMode,
+      resetAll,
+      startNextAvailable,
+    }),
+    [primary, secondary, compareMode, resetAll, startNextAvailable],
+  );
+
+  return <MultiCtx.Provider value={value}>{children}</MultiCtx.Provider>;
 }

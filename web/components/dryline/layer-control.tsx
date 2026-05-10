@@ -20,22 +20,27 @@ export function useLayerToggles(specs: LayerSpec[]): {
   state: Record<LayerKey, boolean>;
   toggle(k: LayerKey): void;
 } {
-  const initial = React.useMemo(() => {
-    const base = Object.fromEntries(
-      specs.map((s) => [s.key, !s.disabled]),
-    ) as Record<LayerKey, boolean>;
-    if (typeof window === "undefined") return base;
+  const base = React.useMemo(
+    () =>
+      Object.fromEntries(specs.map((s) => [s.key, !s.disabled])) as Record<
+        LayerKey,
+        boolean
+      >,
+    [specs],
+  );
+
+  const [state, setState] = React.useState<Record<LayerKey, boolean>>(base);
+
+  React.useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return base;
+      if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<Record<LayerKey, boolean>>;
-      return { ...base, ...parsed };
+      setState((prev) => ({ ...prev, ...parsed }));
     } catch {
-      return base;
+      /* swallow */
     }
-  }, [specs]);
-
-  const [state, setState] = React.useState<Record<LayerKey, boolean>>(initial);
+  }, []);
 
   const toggle = React.useCallback((k: LayerKey) => {
     setState((s) => {

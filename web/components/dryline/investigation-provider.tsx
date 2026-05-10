@@ -63,6 +63,9 @@ interface MultiApi {
   resetAll(): void;
   /** Open `loc` in the next empty slot when compareMode is on, else primary. */
   startNextAvailable(location: DemoLocationWithCoords, modeOverride?: Mode): void;
+  /** Whether the full-screen action draft surface is open. Triggered from the inline ActionCard. */
+  actionsOpen: boolean;
+  setActionsOpen(value: boolean): void;
 }
 
 const initialState: InvestigationState = {
@@ -297,14 +300,14 @@ function useSlotState(getAgentic: () => boolean): {
 const LS_AGENTIC = "dryline.agentic-mode.v1";
 
 export function InvestigationProvider({ children }: { children: React.ReactNode }) {
-  const [agenticMode, setAgenticModeState] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+  const [agenticMode, setAgenticModeState] = React.useState<boolean>(false);
+  React.useEffect(() => {
     try {
-      return localStorage.getItem(LS_AGENTIC) === "1";
+      if (localStorage.getItem(LS_AGENTIC) === "1") setAgenticModeState(true);
     } catch {
-      return false;
+      /* ignore */
     }
-  });
+  }, []);
   const agenticRef = React.useRef(agenticMode);
   React.useEffect(() => {
     agenticRef.current = agenticMode;
@@ -322,6 +325,7 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
   const primarySlot = useSlotState(getAgentic);
   const secondarySlot = useSlotState(getAgentic);
   const [compareMode, setCompareMode] = React.useState(false);
+  const [actionsOpen, setActionsOpen] = React.useState(false);
 
   const primary: SlotApi = React.useMemo(
     () => ({ ...primarySlot.state, start: primarySlot.start, reset: primarySlot.reset }),
@@ -335,6 +339,7 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
   const resetAll = React.useCallback(() => {
     primarySlot.reset();
     secondarySlot.reset();
+    setActionsOpen(false);
   }, [primarySlot, secondarySlot]);
 
   const startNextAvailable = React.useCallback<MultiApi["startNextAvailable"]>(
@@ -365,8 +370,19 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
       setAgenticMode,
       resetAll,
       startNextAvailable,
+      actionsOpen,
+      setActionsOpen,
     }),
-    [primary, secondary, compareMode, agenticMode, setAgenticMode, resetAll, startNextAvailable],
+    [
+      primary,
+      secondary,
+      compareMode,
+      agenticMode,
+      setAgenticMode,
+      resetAll,
+      startNextAvailable,
+      actionsOpen,
+    ],
   );
 
   return <MultiCtx.Provider value={value}>{children}</MultiCtx.Provider>;

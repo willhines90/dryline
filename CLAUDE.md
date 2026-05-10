@@ -2,6 +2,14 @@
 
 You are working on **Dryline**, a Texas water environmental-intelligence tool built for the AITX × Codex Hackathon (May 9–10, 2026). This file is your project briefing. Read [`PROPOSAL.md`](./PROPOSAL.md) before any non-trivial change — it's the source of truth for scope, demo flow, and what to avoid.
 
+## Where Dryline sits in the ecosystem
+
+Future agents pick up this project: do not let the positioning drift. Dryline is *not* a generic civic-data dashboard, *not* a chatbot for water questions, *not* a re-skin of TWDB. The wedge is sharper than that.
+
+The one-line version: **the address-based environmental tools you know stop where water supply begins.** First Street / Risk Factor cover flood, fire, heat — never supply. EJScreen and ECHO are address-aware but not water-supply-focused. TWDB has the data but no consumer surface. TLWP / Sierra Club have the issue framing but no engineering. Dryline is the first product that stacks all four layers — **synthesis, interpretation, action, water-as-the-lens** — in one place, address-anchored, Texas-deep.
+
+When making product decisions (new tools, new modes, scope changes, copy choices), check them against the wedge. Anything that pulls Dryline toward "general civic dashboard" or "chatbot for environmental questions" is drift; flag it instead of building it. Full analysis: [`LANDSCAPE.md`](./LANDSCAPE.md).
+
 ## Repo layout
 
 - `mcp/` — the MCP server: 8 bounded tools, all returning `{ data, caveats[], sources[] }`. DuckDB snapshot loader for groundwater wells, parcels, floodplain.

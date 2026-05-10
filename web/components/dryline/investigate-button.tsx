@@ -51,8 +51,16 @@ interface ModeToggleProps {
  */
 export function ModeToggle({ value, onChange, className }: ModeToggleProps) {
   const opts: { k: Mode; label: string; q: string }[] = [
-    { k: "personal", label: "Personal", q: "Will the water last here?" },
-    { k: "transparency", label: "Transparency", q: "Who's drinking your aquifer?" },
+    {
+      k: "personal",
+      label: "Personal",
+      q: "Personal view — reads the address as a homeowner: drought stage, drinking-water compliance, aquifer trend, what to do this season.",
+    },
+    {
+      k: "transparency",
+      label: "Transparency",
+      q: "Transparency view — reads the address as a neighbor or reporter: large industrial water users, active permits, contested groundwater.",
+    },
   ];
   return (
     <div

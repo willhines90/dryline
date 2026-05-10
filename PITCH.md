@@ -81,12 +81,12 @@
 
 ## Slide 7 — How it's built (15s)
 
-**Visual:** Three boxes — `mcp/` `skill/` `web/` — sitting on top of a row of 8 dataset logos. Above them, a banner: "OpenAI Responses API + MCP. Built with Codex."
+**Visual:** Three boxes — `mcp/` `skill/` `web/` — sitting on top of a row of 8 dataset logos. Above them, a banner: "Built in parallel with Codex + Claude Code · Runtime on OpenAI Responses API + MCP."
 
 **Headline:** *MCP server + agent skill + map-first web app.*
 
 **Spoken:**
-> "Three pieces. An MCP server with six bounded tools, every one returning data, caveats, and sources. A portable agent skill — a SKILL.md plus references — that any compliant agent can load to get the same investigation discipline. And a Next.js + MapLibre web app that makes the reasoning trace cinematic. The brief said teams that ship both an MCP server *and* a skill are especially competitive. We shipped both."
+> "Three pieces. An MCP server with six bounded tools, every one returning data, caveats, and sources. A portable agent skill — a SKILL.md plus references — that any compliant agent can load to get the same investigation discipline. And a Next.js + MapLibre web app that makes the reasoning trace cinematic. I built it solo, but with two coding agents working in parallel — Codex on the web app, Claude Code on the MCP server and the skill, each on its own git worktree, with me merging on main. The brief said teams that ship both an MCP server *and* a skill are especially competitive. We shipped both."
 
 ---
 
@@ -110,7 +110,7 @@
 | Judging criterion | Dryline |
 |---|---|
 | **Technical execution** | MCP server (6 tools), portable agent skill, Next.js map app. 5 live APIs + 1 curated snapshot (TWDB GWDB). |
-| **Partner ecosystem** | Built with Codex. Runtime on OpenAI Responses API + MCP. Shipped against both required deliverables in the brief. |
+| **Partner ecosystem** | Built in parallel with **Codex** (web app) and **Claude Code** (MCP server + skill). Runtime on OpenAI Responses API + MCP. Shipped both required deliverables in the brief. |
 | **Value & impact** | Two modes, two real users — homeowner and citizen. Hero artifact is a fileable public comment on a live TCEQ permit. |
 | **Innovation** | Visible agent reasoning over a water *dependency graph,* not a flat dataset. Citations are first-class. Action drafts close the loop from data to civic process. |
 

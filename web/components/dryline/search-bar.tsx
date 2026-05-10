@@ -281,7 +281,7 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
           <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
             {q.trim()
               ? `${candidates.length} MATCH${candidates.length === 1 ? "" : "ES"}`
-              : "STAGED · KNOWN"}
+              : "SAMPLES · TEXAS CITIES"}
           </div>
           {candidates.map((c, i) => (
             <button
@@ -304,23 +304,17 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
                 <span
                   title={
                     c.kind === "staged"
-                      ? c.live
-                        ? "One of three rehearsed live-demo addresses."
-                        : "Pre-staged demo address with curated narrative."
-                      : "Known Texas city — runs a real live investigation against public APIs."
+                      ? "Sample Texas address with a curated story walkthrough."
+                      : "Texas city — runs a fresh investigation against live public APIs."
                   }
                   className={cn(
                     "shrink-0 font-mono text-[8.5px] tracking-[0.16em] px-1.5 py-px border",
-                    c.kind === "staged" && c.live
+                    c.kind === "staged"
                       ? "text-aquifer border-aquifer/60"
                       : "text-tideline border-rule",
                   )}
                 >
-                  {c.kind === "staged"
-                    ? c.live
-                      ? "DEMO TRIO"
-                      : "STAGED"
-                    : "KNOWN CITY"}
+                  {c.kind === "staged" ? "SAMPLE" : "TX CITY"}
                 </span>
               </div>
               <div className="text-[11.5px] text-tideline mt-0.5">{c.sub}</div>

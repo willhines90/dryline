@@ -26,7 +26,7 @@ import {
 import { InvestigateButton, ModeToggle } from "@/components/dryline/investigate-button";
 import { ReasoningTrace } from "@/components/dryline/reasoning-trace";
 import { SynthesisCard } from "@/components/dryline/synthesis-card";
-import { ActionsTab } from "@/components/dryline/actions-tab";
+import { ActionsTab, ActionCard } from "@/components/dryline/actions-tab";
 import { DrylineLogo } from "@/components/dryline/dryline-logo";
 import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
@@ -36,6 +36,7 @@ import { AboutModal } from "@/components/dryline/about-modal";
 import { AgenticToggle } from "@/components/dryline/agentic-toggle";
 import { TraceSkeleton } from "@/components/dryline/trace-skeleton";
 import { DarkModeProvider, DarkModeToggle } from "@/components/dryline/dark-mode-toggle";
+import { HeaderHelp } from "@/components/dryline/header-help";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -80,8 +81,16 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
                 Dryline
               </span>
             </Link>
-            <span className="hidden lg:inline font-serif italic text-[13px] text-tideline truncate">
-              Investigate Texas water at any address.
+            <span className="hidden lg:flex items-baseline gap-2 min-w-0">
+              <span className="font-serif italic text-[13px] text-tideline truncate">
+                Address-based water-supply intelligence for Texas.
+              </span>
+              <span
+                className="hidden xl:inline font-mono text-[9.5px] tracking-[0.18em] uppercase text-aquifer/70"
+                title="First Street and EJScreen score flood, fire, and pollution at any address — but stop where water supply begins. Dryline starts there."
+              >
+                · supply, not just risk
+              </span>
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -94,9 +103,11 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             <CompareToggle />
             <AgenticToggle />
             <DarkModeToggle />
+            <HeaderHelp />
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
+              title="What Dryline is, what each mode means, and where the data comes from."
               className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors"
             >
               About
@@ -232,14 +243,6 @@ function DemoAddressList({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <div className="dryline-label truncate">{loc.region}</div>
-                {loc.live ? (
-                  <span
-                    title="One of the three live-demo addresses we've rehearsed for the cinematic trio."
-                    className="font-mono text-[8.5px] tracking-[0.18em] text-aquifer border border-aquifer/60 px-1.5 py-px shrink-0"
-                  >
-                    DEMO TRIO
-                  </span>
-                ) : null}
               </div>
 
               <div className="font-serif text-[16px] leading-tight tracking-[-0.008em] mt-1 text-ink">
@@ -382,18 +385,20 @@ function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
             </button>
           </div>
         ) : null}
-        <section>
-          {showSkeleton ? <TraceSkeleton /> : null}
-          {!showSkeleton ? (
-            <>
-              <div className="dryline-label mb-1.5">Reasoning trace</div>
-              <ReasoningTrace />
-            </>
-          ) : null}
-        </section>
+
+        {/* 1. Headline number — the answer at a glance. */}
         {score ? <DrylineScore score={score} /> : null}
+
+        {/* 2. Cited synthesis — the answer in prose. */}
+        <SynthesisCard />
+
+        {/* 3. Action — what to do next, drafted from this investigation. */}
+        <ActionCard />
+
+        {/* 4. Reasoning trace — supporting evidence below the headline.
+            Renders its own header + N/N progress strip; no outer label. */}
         <section>
-          <SynthesisCard />
+          {showSkeleton ? <TraceSkeleton /> : <ReasoningTrace />}
         </section>
       </div>
     </div>

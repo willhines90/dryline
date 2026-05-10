@@ -7,7 +7,7 @@
 **Tracks:** Brainforge / Vicinity Texas Open Data Track (primary) · Agents Track (secondary)
 **Name:** Dryline — named for the meteorological boundary across West Texas where dry continental air meets moist Gulf air. The dryline is the line where Texas weather and Texas water meet, every day.
 **Team:** Solo build; architecture split along `/mcp`, `/skill`, `/web` so a teammate joining mid-stream can take any one piece independently.
-**Build tool:** Codex (hackathon sponsor — OpenAI's terminal-based agentic coding agent) · **Runtime agent:** OpenAI Responses API + MCP
+**Build tools:** Codex (hackathon sponsor — OpenAI's terminal-based agentic coding agent) on `/web` · Claude Code on `/mcp` + `/skill` · parallel git worktrees per [`MERGE.md`](./MERGE.md) · solo human merging on main · **Runtime agent:** OpenAI Responses API + MCP
 
 ---
 
@@ -16,6 +16,26 @@
 Texas is water-stressed and getting more so — drought, aquifer depletion, population growth, and now hyperscale data centers and semiconductor fabs all draw from the same finite stack. The data exists across TWDB, USGS, TCEQ, EPA, GCDs, and TNRIS, but it's scattered across five sites that don't talk to each other. Dryline is a map-first environmental-intelligence layer that takes any Texas address and tells you what's happening with your water — for personal decisions ("will the water last here?") and for civic transparency ("who's drinking your aquifer?") — with an agent that autonomously investigates, cites every source, and drafts concrete actions like public comments and weekly briefings.
 
 **The deeper framing.** Dryline isn't an investigation of a *place*. It's a way to see the *hidden systems* behind a place — the reservoir that feeds your utility, the utility that serves your county, the industrial permit drawing from your aquifer, the drought zone overlapping your growth corridor. Address-as-entry-point is the demo affordance; the underlying object the agent reasons over is a water dependency graph.
+
+## Where Dryline sits
+
+The one-line version: **the address-based environmental tools you know stop where water supply begins.**
+
+Five categories of prior art exist; none stack the four layers Dryline does:
+
+| Category | Examples | Stops short of |
+|---|---|---|
+| Texas water data portals | TWDB, TCEQ, Texas Water Data Hub, TNC's Texas Water Explorer | Address-anchored narrative; built for analysts |
+| Climate-risk address scoring | First Street / Risk Factor, ClimateCheck, Telescope, Jupiter | Water supply (they cover flood, fire, heat, coastal) |
+| Federal environmental tools | EPA ECHO, EPA EJScreen, USGS National Water Dashboard | Water-supply lens; Texas-specific depth |
+| Permit-watch / civic-comment | TCEQ CID email alerts, Regulations.gov, Public Comment Project | Drafting + interpretation (notification only) |
+| Conservation scorecards | TLWP Conservation Scorecard, Sierra Club, Hill Country Alliance | Interactive, address-anchored, timely |
+
+The four layers Dryline stacks: **synthesis** (5+ portals into one picture), **interpretation** (data into meaning), **action** (citation-backed civic comment), and **water-as-the-lens** (address-anchored, supply-focused, Texas-deep).
+
+Three-legs-of-stool moat: **TWDB has the data** but no consumer surface; **First Street has the surface** but no water supply; **Sierra Club / TLWP have the framing** but no engineering. Dryline puts those three in one place; the agent-native architecture is what makes it cheap enough for a small team to actually do it.
+
+For the full analysis — every category, every gap, the risks worth naming, and the sources — see [`LANDSCAPE.md`](./LANDSCAPE.md).
 
 ## Why this hits both tracks honestly, not stretched
 
@@ -242,7 +262,7 @@ Judges remember the investigation flow, the narrative, the reasoning trace, and 
 ## Resolved decisions
 
 - **Name:** Dryline (above)
-- **Build tool:** Codex (hackathon sponsor; OpenAI's terminal-based agentic coding agent)
+- **Build tools:** Codex on `/web`, Claude Code on `/mcp` + `/skill`, parallel worktrees, human merging on main (per [`MERGE.md`](./MERGE.md)). The two-agents-in-parallel build is itself a credible Agents-track artifact
 - **Runtime agent:** OpenAI Responses API + MCP — Codex is a developer tool, not a production runtime, so these are different layers, not a contradiction
 - **Team posture:** Solo build, with the repo split cleanly along `/mcp`, `/skill`, `/web` so a teammate joining mid-stream can pick up any one piece without stepping on the others
 
@@ -257,4 +277,4 @@ All data is public, accessed via official channels, with sources cited per respo
 
 ---
 
-*Last updated: May 9, 2026 (Saturday — build day). This proposal will be revised as the build progresses; check git history for diffs.*
+*Last updated: May 10, 2026. This proposal will be revised as the build progresses; check git history for diffs. Companion docs: [`LANDSCAPE.md`](./LANDSCAPE.md) (competitive analysis), [`PITCH.md`](./PITCH.md) (slide narrative), [`DEMO.md`](./DEMO.md) (in-person live-demo script), [`LOOM.md`](./LOOM.md) (recorded demo-video script), [`EXTENSIONS.md`](./EXTENSIONS.md) (post-hackathon roadmap).*

@@ -27,12 +27,13 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-const SITE_URL = "https://github.com/willhines90/dryline";
+const SITE_URL = "https://dryline-web.vercel.app";
 const TITLE = "Dryline — Investigate Texas water at any address";
 const DESCRIPTION =
   "Texas added 4 million people in five years. Our water didn't keep up. Type any Texas address and Dryline streams a cited investigation across drought, reservoirs, drinking water, aquifer monitoring, and federally-reportable industrial dischargers — every claim sourced, structured caveats, drafted civic action.";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: TITLE,
     template: "%s · Dryline",

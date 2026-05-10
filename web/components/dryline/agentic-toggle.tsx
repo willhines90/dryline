@@ -21,8 +21,8 @@ export function AgenticToggle({ className }: { className?: string }) {
       onClick={() => setAgenticMode(!agenticMode)}
       title={
         agenticMode
-          ? "Agentic mode ON — the LLM picks tools each run. Slower (≈30 s) but visibly agentic."
-          : "Agentic mode OFF — deterministic 7-tool fan-out (≈18 s, demo-stable)."
+          ? "Agentic mode is ON — an LLM decides which data tools to call for each address. Slower (≈30 s) but you can watch the model reason. Click to return to fast deterministic mode."
+          : "Agentic mode — let an LLM choose which data tools to call instead of running them in a fixed order. Slower (≈30 s) but the agent's judgment is visible."
       }
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-rule",

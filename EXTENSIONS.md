@@ -14,6 +14,8 @@ The hackathon scope locks Dryline as a **diagnostic** tool: address in → cited
 
 Forecasting (Aquifer Forecaster, Resilience Score) and adjacent-domain expansion (Adjacent Layers) sit on top of all three.
 
+**Competitive context.** Every extension below was scored against the wedge documented in [`LANDSCAPE.md`](./LANDSCAPE.md): does it widen the gap between Dryline and the closest analog (First Street / Risk Factor for address-based scoring; TWDB dashboards for Texas water in aggregate), or does it commoditize the project? The Water Resilience Score (P2) and Portfolio Mode (P4) score especially well precisely because no climate-risk-score company covers water supply at parcel level — that's the open lane.
+
 ---
 
 ## Rubric

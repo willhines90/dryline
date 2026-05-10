@@ -8,7 +8,7 @@ Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (
 - **Brainforge / Vicinity Texas Open Data Track**
 - **Agents Track**
 
-**Live demo:** _(deployed URL pending — see PHASE 5)_
+**Live demo:** [dryline-web.vercel.app](https://dryline-web.vercel.app/)
 **Repo:** [github.com/willhines90/dryline](https://github.com/willhines90/dryline)
 
 ---
@@ -17,7 +17,7 @@ Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (
 
 Texas added 4 million people in five years. Our water didn't keep up. The data is real, public, and federally published — but it's spread across a stack of state and federal agencies, each with a different update cadence, access pattern, and freshness profile. By the time a homeowner finds out their groundwater table dropped twelve feet last decade, or that a new fab three miles upstream just got a discharge permit, the comment window has closed.
 
-Dryline collapses that distance. Type any Texas address. An agent fans out across drought, reservoirs, drinking water, aquifer monitoring, federally-reportable industrial dischargers, stream gauges, and active permits — returning each tool's result with **inline citations and structured caveats**. No black-box answers, no hedged guesses. A synthesis card lands the situation in 2–4 paragraphs of cited prose. A drafted artifact slides in from the right edge: a watering reminder, a well-outlook briefing, a public comment with a real NPDES permit ID, a letter to a Groundwater Conservation District, or a Public Information Act request.
+Dryline collapses that distance. Type any Texas address. An agent fans out across drought, reservoirs, drinking water, aquifer monitoring, federally-reportable industrial dischargers, stream gauges, and active permits — returning each tool's result with **inline citations and structured caveats**. No black-box answers, no hedged guesses. A 0–100 Dryline Score lands first, a synthesis card lands the situation in 2–4 paragraphs of cited prose, and an inline action card surfaces a drafted civic-action artifact: a watering reminder, a well-outlook briefing, a public comment with a real NPDES permit ID, a letter to a Groundwater Conservation District, or a Public Information Act request.
 
 Same investigation, two presentations:
 
@@ -28,18 +28,34 @@ Same investigation, two presentations:
 
 ---
 
+## Where Dryline sits
+
+The one-line version: **the address-based environmental tools you know stop where water supply begins.**
+
+| Tool | Tells you | Doesn't |
+|---|---|---|
+| First Street / Risk Factor | Flood, fire, heat at any address | Water supply |
+| EPA EJScreen | Pollution + EJ indicators by Census block | Address-level water supply |
+| TWDB dashboards | Texas water in aggregate | Anchored to your address |
+| TLWP Scorecard | Conservation by utility | Interactive · narrative · timely |
+
+Dryline stacks four layers nobody else does in one place: **synthesis** (five+ portals into one picture), **interpretation** (data into meaning), **action** (citation-backed civic comment), and **water-as-the-lens** (address-anchored, supply-focused, Texas-deep). Full analysis in [LANDSCAPE.md](./LANDSCAPE.md).
+
+---
+
 ## First-time-user quickstart
 
 Never used Dryline? Read this once and you're set.
 
 1. **The map (left side).** Texas under a current-week U.S. Drought Monitor color wash. Tide-blue dots are the 18 major TWDB-instrumented reservoirs. Mode-colored dots (aquifer-blue or ochre) are the seven pre-staged demo addresses. Click any of them — or use the search bar (⌘K) to type your own address.
 
-2. **The right panel.** Once an address is picked, the panel transforms into the active investigation:
-   - **Reasoning trace** at the top — every tool call streams in as it lands, with a one-line plain-English label, citation chips ([1] [2] …) linking to the actual public source, and structured caveat badges (info / warning / error · category).
-   - **Dryline Score** in the middle — single 0–100 number summarizing water stress at this address. Hover *Why this number?* for the per-subscore rationale.
-   - **Synthesis** at the bottom — 2–4 paragraphs of cited prose. Every fact-bearing sentence links to its source URL with a retrieval timestamp.
+2. **The right panel.** Once an address is picked, the panel transforms into the active investigation. Read it top-to-bottom:
+   - **Dryline Score** at the top — a single 0–100 number summarizing water stress at this address. Hover *Why this number?* for the per-subscore rationale.
+   - **Synthesis** next — 2–4 paragraphs of cited prose. Every fact-bearing sentence links to its source URL with a retrieval timestamp.
+   - **Action card** below the synthesis — an aquifer-stripe card with the drafted civic-action artifact's title and a 3-line preview. Click *Open draft →* to expand the full letter.
+   - **Reasoning trace** at the bottom — every tool call streams in as it lands, with a one-line plain-English label, citation chips ([1] [2] …) linking to the actual public source, and structured caveat badges (info / warning / error · category). Acts as supporting evidence beneath the headline.
 
-3. **The drafted artifact (right edge).** When the investigation finishes, a tab pulses on the right edge labeled *Action ↗*. Click it to slide in the drafted civic-action document — a public comment, a watering reminder, a GCD letter, or a Public Information Act request, formatted as a letter with `To:` / `RE:` headers. There's a **Review before sending** banner above it. There is no auto-submit. The agent puts a draft in your hands; you decide what to do with it.
+3. **The drafted artifact.** Clicking *Open draft →* slides in a full-width drawer with the drafted civic-action document — a public comment, a watering reminder, a GCD letter, or a Public Information Act request, formatted as a letter with `To:` / `RE:` headers. There's a **Review before sending** banner above it. There is no auto-submit. The agent puts a draft in your hands; you decide what to do with it.
 
 4. **Compare two addresses.** Click the **Compare** toggle in the header. Pick two demo addresses (or two free-text addresses). The panel splits — primary on top, secondary below — and a hero strip lights up above both showing the two Dryline Scores side by side and the three biggest subscore deltas. Useful for "Wimberley vs Taylor" stories.
 
@@ -103,7 +119,7 @@ The cinematic flow, in three frames. Capture pass happens during PHASE 5 visual 
 |---|---|
 | **Map view** — All seven demo locations marked. Topographic basemap; reservoir-blue accents on arid earth. | ![map](docs/screenshots/01-map.png) |
 | **Investigation in flight** — Reasoning trace streaming, citation chips alive, synthesis card materializing. | ![investigation](docs/screenshots/02-investigation.png) |
-| **Public comment draft** — Actions tab open, drafted letter with cited NPDES IDs, *Review before sending* notice, copy-to-clipboard button. | ![public comment](docs/screenshots/03-public-comment.png) |
+| **Public comment draft** — Action drawer open, drafted letter with cited NPDES IDs, *Review before sending* notice, copy-to-clipboard button. | ![public comment](docs/screenshots/03-public-comment.png) |
 
 ---
 
@@ -131,9 +147,9 @@ Subscores with no available data score 50 (neutral) and the rationale field reco
 
 Dryline ships its tools as **both a stdio MCP server** (`@dryline/mcp`) **and as in-process function tools for the web app**. The web demo uses a deterministic tool sequence by default for sub-25 s reliability; an `?agent=1` query flag enables real LLM-driven tool selection via the OpenAI Responses API. The MCP server is the composable artifact — anyone can attach it to Claude Code, Codex, or Cursor. The agent's judgment shows up in synthesis emphasis, action-artifact selection, and citation discipline.
 
-**Why deterministic by default for the web demo.** A managed agent loop adds model round-trips on top of `max(tool_latencies)`, which pushed dense-metro investigations to 50–70 s wall-clock under variable OpenAI load. The MVP toolset is six tools total: `resolve_location` runs first, then the other five (`get_drought_status`, `get_reservoirs`, `get_drinking_water`, `get_big_users_nearby`, `get_aquifer_status`) fan out in parallel. Pre-fetching that fan-out keeps the cinematic trace identical from the user's side (`tool_start` and `tool_result` SSE events still stream in real time as each tool resolves) while bringing every investigation under the 25 s budget. The synthesis-only Responses API call is where the model's judgment lands — the system prompt is the [skill brief](skill/SKILL.md), the user message includes the fixture's narrative framing, and the artifact selection (and refusal to invent docket numbers) is the agent's call.
+**Why deterministic by default for the web demo.** A managed agent loop adds model round-trips on top of `max(tool_latencies)`, which pushed dense-metro investigations to 50–70 s wall-clock under variable OpenAI load. The toolset is **eight tools** total: `resolve_location` runs first, then the other seven (`get_drought_status`, `get_reservoirs`, `get_drinking_water`, `get_big_users_nearby`, `get_aquifer_status`, `get_river_flow`, `get_active_permits`) fan out in parallel. Pre-fetching that fan-out keeps the cinematic trace identical from the user's side (`tool_start` and `tool_result` SSE events still stream in real time as each tool resolves) while bringing every investigation under the 25 s budget. The synthesis-only Responses API call is where the model's judgment lands — the system prompt is the [skill brief](skill/SKILL.md), the user message includes the fixture's narrative framing, and the artifact selection (and refusal to invent docket numbers) is the agent's call.
 
-**The `?agent=1` flag.** Hit `POST /api/investigate?agent=1` and the same SSE contract is served by a real Responses-API tool-calling loop: the model sees all six tools, decides which to call (`resolve_location` is always first; the other five are at the model's discretion), and emits the same `tool_start`/`tool_result`/`synthesis`/`artifact` events. Capped at 50 s wall-clock and 8 iterations. We've observed the model legitimately *skip* tools — Personal-mode Wimberley dropped `get_big_users_nearby`; Fort Stockton sometimes drops `get_drinking_water` to focus on groundwater — which is the right judgment call but produces variable trace shapes that the deterministic path avoids. The flag is the honesty knob: judges who want to see the LLM driving tool selection can pop it on; live demos that need rehearsed timing keep it off.
+**The `?agent=1` flag.** Hit `POST /api/investigate?agent=1` and the same SSE contract is served by a real Responses-API tool-calling loop: the model sees all eight tools, decides which to call (`resolve_location` is always first; the other seven are at the model's discretion), and emits the same `tool_start`/`tool_result`/`synthesis`/`artifact` events. Capped at 50 s wall-clock and 8 iterations. We've observed the model legitimately *skip* tools — Personal-mode Wimberley dropped `get_big_users_nearby`; Fort Stockton sometimes drops `get_drinking_water` to focus on groundwater — which is the right judgment call but produces variable trace shapes that the deterministic path avoids. The flag is the honesty knob: judges who want to see the LLM driving tool selection can pop it on; live demos that need rehearsed timing keep it off.
 
 The contract types (`mcp/src/types.ts` and the hand-mirrored `web/lib/types.ts`) are the wire boundary. The web app does not import from `@dryline/mcp` for type purposes other than to share the in-process registry; runtime decoupling stays clean so the MCP server can move to a different language without dragging the UI with it.
 
@@ -153,9 +169,11 @@ dryline/
 │   └── lib/              Wire-type mirror, Markdown renderer, utils.
 ├── fixtures/             Canonical demo addresses.
 ├── PROPOSAL.md           Project thesis: scope, demo lineup, what not to build.
+├── LANDSCAPE.md          Competitive analysis: where Dryline sits, what's missing in market.
 ├── EXTENSIONS.md         Post-hackathon roadmap.
 ├── DEMO.md               Live three-minute demo script (beat sheet).
-└── PITCH.md              Five-minute pitch narrative.
+├── PITCH.md              Five-minute pitch narrative.
+└── LOOM.md               Recorded demo-video script (~4 min, camera-on, single take).
 ```
 
 ---
@@ -196,6 +214,17 @@ Each MCP tool draws from one or more of these. Mirrors [`skill/references/data-s
 
 ## Quickstart
 
+### API keys you'll need
+
+**Just one:** an `OPENAI_API_KEY` for the synthesis call (and the optional `?agent=1` tool-calling loop). All eight data tools — USDM, TWDB, USGS NWIS, EPA SDWIS/ECHO, U.S. Census Geocoder, Nominatim — are **free public APIs that require no key or signup**. The full data stack works offline-from-OpenAI; only the natural-language synthesis card and the LLM-driven agent loop need an OpenAI key.
+
+| Variable | Where it lives | Required? | Notes |
+|---|---|---|---|
+| `OPENAI_API_KEY` | `web/.env.local` | **Yes** | Used by `/api/investigate` for synthesis. Without it, tools still fire, but no synthesis or artifact is generated. |
+| `NOMINATIM_USER_AGENT` | `.env` | Optional | Defaults to `Dryline/0.0.1 (mail@willhin.es)`. Set your own if you fork. |
+| `MCP_TRANSPORT` | `.env` | Optional | `stdio` (default) or `http`. |
+| `DRYLINE_DUCKDB_PATH` | `.env` | Optional | Path to the GWDB snapshot — defaults to `./mcp/data/dryline.duckdb`. |
+
 ```bash
 git clone https://github.com/willhines90/dryline.git
 cd dryline
@@ -213,7 +242,7 @@ pnpm dev:web
 # → http://localhost:3000
 ```
 
-Click any of the seven demo addresses → **Investigate**. The map flies to the address, the reasoning trace streams the tool calls, the synthesis card lands, the actions tab handle pulses on the right edge.
+Click any of the seven demo addresses → **Investigate**. The map flies to the address, the reasoning trace streams the tool calls, the Dryline Score and cited synthesis land in the right panel, and an inline *Open draft →* action card surfaces underneath with the drafted civic-action artifact.
 
 ### Useful commands
 
@@ -229,9 +258,11 @@ pnpm --filter @dryline/mcp exec \
 ## Documents
 
 - [PROPOSAL.md](./PROPOSAL.md) — full project thesis
+- [LANDSCAPE.md](./LANDSCAPE.md) — competitive analysis & gap framing
 - [EXTENSIONS.md](./EXTENSIONS.md) — post-hackathon roadmap
-- [DEMO.md](./DEMO.md) — live demo beat sheet
-- [PITCH.md](./PITCH.md) — five-minute pitch
+- [DEMO.md](./DEMO.md) — live (in-person) demo beat sheet
+- [PITCH.md](./PITCH.md) — five-minute in-person pitch
+- [LOOM.md](./LOOM.md) — recorded Loom demo script (~4 min, camera-on)
 - [SUBMISSION.md](./SUBMISSION.md) — Brainforge + Agents-track submission copy
 
 ---

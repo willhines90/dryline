@@ -51,14 +51,12 @@ async function fetchAndPack(): Promise<CachePayload> {
   if (memoryCache && Date.now() - memoryCache.generatedAt < MEMORY_TTL_MS) {
     return memoryCache.payload;
   }
+  // USGS NWIS rejects bboxes > ~25 sq°; Texas is ~130 sq°, so the
+  // bbox query 400s. Use the stateCd filter instead — same active
+  // discharge gauges, no size cap.
   const url = new URL("https://waterservices.usgs.gov/nwis/iv/");
   url.searchParams.set("format", "json");
-  url.searchParams.set(
-    "bBox",
-    [TX_BBOX.minLng, TX_BBOX.minLat, TX_BBOX.maxLng, TX_BBOX.maxLat]
-      .map((n) => n.toFixed(2))
-      .join(","),
-  );
+  url.searchParams.set("stateCd", "tx");
   url.searchParams.set("parameterCd", "00060");
   url.searchParams.set("siteStatus", "active");
 

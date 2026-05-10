@@ -206,25 +206,44 @@ export function TexasMap({
           mapReadyRef.current = true;
           setMapReadyState(true);
 
-          // Reservoirs (bottom of marker stack)
+          // Reservoirs (bottom of marker stack). Two-layer marker:
+          // an outer water-tinted halo + a crisp inner dot. The halo
+          // is wider so that at low (state-level) zoom the lakes
+          // still read as discrete water bodies rather than dust.
           for (const r of RESERVOIR_PINS) {
+            const wrap = document.createElement("div");
+            wrap.style.cssText =
+              "position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
+            const halo = document.createElement("div");
+            halo.style.cssText =
+              "position:absolute;width:22px;height:22px;border-radius:99px;background:radial-gradient(circle, rgba(74,138,168,0.45) 0%, rgba(74,138,168,0.0) 70%);transition:transform 200ms ease, opacity 200ms ease;";
             const dot = document.createElement("div");
             dot.style.cssText =
-              "width:10px;height:10px;border-radius:99px;background:#4a8aa8;border:2px solid #d6e4e6;box-shadow:0 0 0 1px rgba(7,23,31,0.18);transition:transform 200ms ease, box-shadow 200ms ease;";
-            dot.title = r.name;
+              "width:9px;height:9px;border-radius:99px;background:#4a8aa8;border:2px solid #ecf3f5;box-shadow:0 0 0 1px rgba(7,23,31,0.28);transition:transform 200ms ease, box-shadow 200ms ease;";
+            wrap.appendChild(halo);
+            wrap.appendChild(dot);
+            wrap.title = r.name;
             const popup = new maplibregl.Popup({
               offset: 14,
               closeButton: false,
               closeOnClick: false,
               className: "dryline-reservoir-popup",
             }).setHTML(
-              `<div style="padding:6px 10px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div><div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px">${r.name}</div></div>`,
+              `<div style="padding:6px 10px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Major reservoir</div><div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px">${r.name}</div></div>`,
             );
-            const marker = new maplibregl.Marker({ element: dot, anchor: "center" })
+            const marker = new maplibregl.Marker({ element: wrap, anchor: "center" })
               .setLngLat([r.lng, r.lat])
               .addTo(map);
-            dot.addEventListener("mouseenter", () => popup.setLngLat([r.lng, r.lat]).addTo(map));
-            dot.addEventListener("mouseleave", () => popup.remove());
+            wrap.addEventListener("mouseenter", () => {
+              popup.setLngLat([r.lng, r.lat]).addTo(map);
+              halo.style.transform = "scale(1.4)";
+              dot.style.transform = "scale(1.3)";
+            });
+            wrap.addEventListener("mouseleave", () => {
+              popup.remove();
+              halo.style.transform = "scale(1)";
+              dot.style.transform = "scale(1)";
+            });
             reservoirMarkersRef.current.push({ slug: r.slug, marker, element: dot });
           }
 
@@ -251,7 +270,7 @@ export function TexasMap({
               closeOnClick: false,
               className: "dryline-demo-popup",
             }).setHTML(
-              `<div style="padding:8px 12px;max-width:240px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">${location.live ? "Live demo" : "In chamber"} · ${location.region}</div><div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;line-height:1.2;margin-top:4px">${location.label}</div><div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${(location as DemoLocation & { headlineStory?: string }).headlineStory ?? ""}</div><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px">Click pin to investigate ↗</div></div>`,
+              `<div style="padding:8px 12px;max-width:240px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Sample address · ${location.region}</div><div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;line-height:1.2;margin-top:4px">${location.label}</div><div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${(location as DemoLocation & { headlineStory?: string }).headlineStory ?? ""}</div><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px">Click pin to investigate ↗</div></div>`,
             );
             const marker = new maplibregl.Marker({ element: wrap, anchor: "center" })
               .setLngLat([location.approxLatLng.lng, location.approxLatLng.lat])
@@ -448,8 +467,9 @@ export function TexasMap({
 
   // ---- 5. Reservoir visibility toggle ----
   useEffect(() => {
-    for (const { element } of reservoirMarkersRef.current) {
-      element.style.display = layerState.reservoirs ? "" : "none";
+    for (const { marker } of reservoirMarkersRef.current) {
+      const el = marker.getElement();
+      if (el) el.style.display = layerState.reservoirs ? "" : "none";
     }
   }, [layerState.reservoirs, mapReadyState]);
 
@@ -544,28 +564,92 @@ export function TexasMap({
         cleanup();
         if (map.getSource(SRC)) return;
         map.addSource(SRC, { type: "geojson", data: fc });
-        // Glow underlayer — wider stroke at lower opacity so dark mode reads as "lit-up rivers".
+        // Wide soft glow underlayer — gives the rivers a "lit aquifer"
+        // feel in dark mode; subtle paper halo in light mode so the
+        // strokes read against the basemap at low zoom.
         map.addLayer({
           id: `${LINE}-glow`,
           type: "line",
           source: SRC,
+          layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": dark ? "#7ad6e9" : "#9ec5cf",
-            "line-opacity": dark ? 0.45 : 0.0,
-            "line-width": dark ? 6 : 0,
-            "line-blur": 2,
+            "line-color": dark ? "#7ad6e9" : "#cfe1e7",
+            "line-opacity": dark ? 0.55 : 0.5,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              dark ? 4.5 : 3,
+              8,
+              dark ? 9 : 6,
+              11,
+              dark ? 14 : 9,
+            ],
+            "line-blur": dark ? 4 : 2.5,
           },
         });
+        // Crisp center stroke. Width scales with zoom so the rivers
+        // stay visible at the state-level fit and grow into proper
+        // ribbons when you zoom into a watershed.
         map.addLayer({
           id: LINE,
           type: "line",
           source: SRC,
+          layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": dark ? "#9ec5cf" : "#0d3b6f",
-            "line-opacity": dark ? 0.95 : 0.6,
-            "line-width": dark ? 2.5 : 1.5,
+            "line-color": dark ? "#bfe5ee" : "#0d3b6f",
+            "line-opacity": dark ? 0.98 : 0.78,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              dark ? 1.4 : 1.1,
+              8,
+              dark ? 2.6 : 2,
+              11,
+              dark ? 4.5 : 3.4,
+            ],
           },
         });
+        // Hover-only river name label. We attach a popup via the line
+        // hit target rather than full symbol layer (no font glyph
+        // dependency on raster basemap).
+        const ml = await import("maplibre-gl");
+        const popup = new ml.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 8,
+          className: "dryline-river-popup",
+        });
+        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+          features?: import("maplibre-gl").MapGeoJSONFeature[];
+        };
+        const onMove = (e: MoveEvt) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const name =
+            (f.properties as { name?: string; NAME?: string } | null)?.name ??
+            (f.properties as { name?: string; NAME?: string } | null)?.NAME ??
+            "River";
+          map.getCanvas().style.cursor = "pointer";
+          popup
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="padding:5px 9px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f">${name}</div>`,
+            )
+            .addTo(map);
+        };
+        const onLeave = () => {
+          map.getCanvas().style.cursor = "";
+          popup.remove();
+        };
+        map.on("mousemove", LINE, onMove);
+        map.on("mouseleave", LINE, onLeave);
+        // Stash the handlers on the map instance so cleanup can detach them.
+        const handlers = { onMove, onLeave, popup };
+        (map as MapInstance & { __riverHandlers?: typeof handlers }).__riverHandlers = handlers;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] rivers layer failed:", err);
@@ -573,6 +657,32 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
+      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __riverHandlers?: {
+            onMove: (e: MoveEvt) => void;
+            onLeave: () => void;
+            popup: PopupInstance;
+          };
+        }
+      ).__riverHandlers;
+      if (handlers) {
+        try {
+          map.off("mousemove", LINE, handlers.onMove);
+          map.off("mouseleave", LINE, handlers.onLeave);
+          handlers.popup.remove();
+        } catch {
+          /* idempotent */
+        }
+        delete (
+          map as MapInstance & {
+            __riverHandlers?: unknown;
+          }
+        ).__riverHandlers;
+      }
       cleanup();
       try {
         if (map.getLayer(`${LINE}-glow`)) map.removeLayer(`${LINE}-glow`);
@@ -774,29 +884,30 @@ export function TexasMap({
               <span className={dark ? "text-spring/80" : "text-ink/85"}>high · 500+</span>
             </div>
           </div>
-          {/* Pin key */}
+          {/* Pin key — kept intentionally short. The two pin colors
+              encode the address's default mode (personal/transparency)
+              but a first-time viewer doesn't need that nuance. */}
           <div>
             <div className={cn(
               "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
               dark ? "text-spring/70" : "text-tideline",
             )}>
-              Pins
+              Pins · click to investigate
             </div>
             <ul className="space-y-0.5 text-[10.5px] leading-snug">
               <li className="flex items-center gap-1.5">
-                <Pin fill="#0d3b6f" ring="#9ec5cf" />
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>Personal-mode address</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Pin fill="#b58a52" ring="#7a5a2c" />
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>Transparency-mode address</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <Pin fill="#0d3b6f" ring="#9ec5cf" />
+                  <Pin fill="#b58a52" ring="#7a5a2c" />
+                </span>
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>Sample address</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <span
                   className="inline-block w-2.5 h-2.5 rounded-full border-2"
                   style={{ background: "#4a8aa8", borderColor: dark ? "#0a0e16" : "#d6e4e6" }}
                 />
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>TWDB reservoir (18)</span>
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>Major reservoir (18)</span>
               </li>
             </ul>
           </div>

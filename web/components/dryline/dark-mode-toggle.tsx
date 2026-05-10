@@ -13,14 +13,14 @@ interface DarkModeContextValue {
 const DarkModeCtx = React.createContext<DarkModeContextValue | null>(null);
 
 export function DarkModeProvider({ children }: { children: React.ReactNode }) {
-  const [dark, setDarkState] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+  const [dark, setDarkState] = React.useState<boolean>(false);
+  React.useEffect(() => {
     try {
-      return localStorage.getItem(LS_KEY) === "1";
+      if (localStorage.getItem(LS_KEY) === "1") setDarkState(true);
     } catch {
-      return false;
+      /* swallow */
     }
-  });
+  }, []);
   const setDark = React.useCallback((v: boolean) => {
     setDarkState(v);
     try {
@@ -52,7 +52,11 @@ export function DarkModeToggle({ className }: { className?: string }) {
       role="switch"
       aria-checked={dark}
       onClick={() => setDark(!dark)}
-      title={dark ? "Switch to paper map" : "Switch to dark live-mode map"}
+      title={
+        dark
+          ? "Live map view is ON — dark cartography with glowing rivers and gauges. Click to return to the paper map."
+          : "Live map view — dark command-center map with glowing rivers and stream gauges. Same data, different lens."
+      }
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-1.5 border",
         "font-mono text-[10px] tracking-[0.18em] uppercase",
@@ -63,7 +67,7 @@ export function DarkModeToggle({ className }: { className?: string }) {
       )}
     >
       <span aria-hidden>{dark ? "◐" : "○"}</span>
-      Live
+      Live map
     </button>
   );
 }

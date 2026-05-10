@@ -41,3 +41,48 @@ export interface DemoLocation {
   mode: Mode;
   headlineStory: string;
 }
+
+export interface DemoLocationWithCoords extends DemoLocation {
+  approxLatLng?: { lat: number; lng: number };
+  live?: boolean;
+}
+
+// ---- Investigation flow (Phase 3) ----
+
+export type ToolStartEvent = {
+  type: "tool_start";
+  toolName: string;
+  args: unknown;
+};
+
+export type ToolResultEvent = {
+  type: "tool_result";
+  toolName: string;
+  summary: string;
+  data: unknown;
+  sources: Source[];
+  caveats: Caveat[];
+};
+
+export type TraceEvent = ToolStartEvent | ToolResultEvent;
+
+export type ArtifactKind =
+  | "public_comment"
+  | "watering_reminder"
+  | "gcd_letter"
+  | "well_outlook_briefing"
+  | "pia_request"
+  | "weekly_briefing";
+
+export interface ArtifactPayload {
+  kind: ArtifactKind | string;
+  title: string;
+  markdown: string;
+}
+
+export interface SynthesisPayload {
+  markdown: string;
+  sources: Source[];
+}
+
+export type InvestigationStatus = "idle" | "streaming" | "done" | "error";

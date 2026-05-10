@@ -53,10 +53,17 @@ type MapLocation = DemoLocation & {
   };
 };
 
-export function TexasMap({ locations }: { locations: MapLocation[] }) {
+interface TexasMapProps {
+  locations: MapLocation[];
+  /** When set, the map flies to this location's approxLatLng. */
+  focusedLocation?: MapLocation | null;
+}
+
+export function TexasMap({ locations, focusedLocation }: TexasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const markersRef = useRef<Array<{ marker: MarkerInstance; popup: PopupInstance }>>([]);
+  const mapReadyRef = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -85,6 +92,7 @@ export function TexasMap({ locations }: { locations: MapLocation[] }) {
 
       map.on("load", () => {
         map.fitBounds(TEXAS_BOUNDS, { padding: 36, duration: 0 });
+        mapReadyRef.current = true;
 
         locations.forEach((location) => {
           if (!location.approxLatLng) {
@@ -131,10 +139,32 @@ export function TexasMap({ locations }: { locations: MapLocation[] }) {
         marker.remove();
       });
       markersRef.current = [];
+      mapReadyRef.current = false;
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, [locations]);
+
+  // Drive the camera from `focusedLocation`. flyTo when set; reset to bounds
+  // when cleared.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      if (focusedLocation?.approxLatLng) {
+        map.flyTo({
+          center: [focusedLocation.approxLatLng.lng, focusedLocation.approxLatLng.lat],
+          zoom: 9.5,
+          duration: 1400,
+          essential: true,
+        });
+      } else {
+        map.fitBounds(TEXAS_BOUNDS, { padding: 36, duration: 900 });
+      }
+    };
+    if (mapReadyRef.current) apply();
+    else map.once("load", apply);
+  }, [focusedLocation]);
 
   return (
     <div className="relative h-full min-h-[420px] overflow-hidden bg-reservoir-100">

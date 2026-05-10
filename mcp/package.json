@@ -8,6 +8,11 @@
   "bin": {
     "dryline-mcp": "dist/index.js"
   },
+  "exports": {
+    ".": "./src/index.ts",
+    "./tools": "./src/tools/index.ts",
+    "./types": "./src/types.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",

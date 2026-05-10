@@ -23,6 +23,82 @@ const inputSchema = z.object({
 
 type Input = z.infer<typeof inputSchema>;
 
+/**
+ * Texas county-name → 5-digit FIPS map. Used as a fallback when Census
+ * Geocoder is unavailable (it 5xxs under load). Covers the seven demo
+ * counties plus the seven "in-the-chamber" locations from
+ * fixtures/demo-addresses.json. Expand as needed.
+ *
+ * Names are lowercase, with no "County" suffix and no Texas-style
+ * abbreviations.
+ */
+const TX_COUNTY_FIPS: Record<string, string> = {
+  hays: "48209",
+  williamson: "48491",
+  pecos: "48371",
+  harris: "48201",
+  lubbock: "48303",
+  "el paso": "48141",
+  bexar: "48029",
+  travis: "48453",
+  dallas: "48113",
+  tarrant: "48439",
+  denton: "48121",
+  collin: "48085",
+  galveston: "48167",
+  midland: "48329",
+  ector: "48135",
+  reeves: "48389",
+  brewster: "48043",
+  presidio: "48377",
+  jeff_davis: "48243",
+  hudspeth: "48229",
+};
+
+function countyKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/\s+county\s*$/i, "")
+    .replace(/[^a-z\s]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+async function fetchCensusCounty(
+  url: URL,
+): Promise<{ geoid: string; name: string } | null> {
+  // Census 502s under load. Three attempts with exponential backoff.
+  let lastErr: string | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 300 * 2 ** (attempt - 1)));
+    }
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        lastErr = `Census ${res.status}`;
+        if (res.status < 500) break; // 4xx won't fix itself
+        continue;
+      }
+      const json = (await res.json()) as {
+        result?: { geographies?: { Counties?: Array<{ GEOID?: string; NAME?: string }> } };
+      };
+      const county = json.result?.geographies?.Counties?.[0];
+      if (county?.GEOID && county.NAME) {
+        return { geoid: county.GEOID, name: county.NAME };
+      }
+      lastErr = "Census returned no county";
+      break;
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err);
+    }
+  }
+  if (lastErr) {
+    console.warn(`[resolve_location] Census fallback (${lastErr})`);
+  }
+  return null;
+}
+
 export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
   name: "resolve_location",
   description:
@@ -71,8 +147,10 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
       const lat = Number(top.lat);
       const lng = Number(top.lon);
 
-      // 2. Census Geocoder for county FIPS (Nominatim doesn't always include it cleanly).
-      // Census 502s under load; one quick retry.
+      // 2. Census Geocoder for county FIPS (Nominatim doesn't always include
+      // it cleanly). 3-retry exponential backoff; fall back to a TX-only
+      // county-name → FIPS lookup using Nominatim's address.county when
+      // Census is sustainedly unavailable.
       const censusUrl = new URL("https://geocoding.geo.census.gov/geocoder/geographies/coordinates");
       censusUrl.searchParams.set("x", String(lng));
       censusUrl.searchParams.set("y", String(lat));
@@ -81,29 +159,45 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
       censusUrl.searchParams.set("layers", "Counties");
       censusUrl.searchParams.set("format", "json");
 
-      let censusRes = await fetch(censusUrl);
-      if (!censusRes.ok && censusRes.status >= 500) {
-        await new Promise((r) => setTimeout(r, 400));
-        censusRes = await fetch(censusUrl);
+      let countyFips: string | null = null;
+      let countyName: string | null = null;
+      const censusResult = await fetchCensusCounty(censusUrl);
+      const censusCaveats: typeof errorCaveat extends never ? never : ReturnType<typeof boundsCaveat>[] = [];
+      if (censusResult) {
+        countyFips = censusResult.geoid;
+        countyName = censusResult.name.replace(/ County$/i, "");
+        sources.push(
+          source({
+            title: "Census Geocoder — county FIPS",
+            url: censusUrl.toString(),
+            publisher: "U.S. Census Bureau",
+          }),
+        );
+      } else if (top.address?.county) {
+        // Fallback: Nominatim already gave us the county name; map TX → FIPS.
+        const key = countyKey(top.address.county);
+        const fips = TX_COUNTY_FIPS[key];
+        if (fips) {
+          countyFips = fips;
+          countyName = top.address.county.replace(/ County$/i, "");
+          censusCaveats.push(
+            boundsCaveat(
+              `Census Geocoder unreachable; resolved county FIPS via Nominatim's '${top.address.county}' field against Dryline's Texas county table.`,
+              "warning",
+            ),
+          );
+        }
       }
-      if (!censusRes.ok) throw new Error(`Census ${censusRes.status}`);
-      sources.push(
-        source({ title: "Census Geocoder — county FIPS", url: censusUrl.toString(), publisher: "U.S. Census Bureau" }),
-      );
-      const censusJson = (await censusRes.json()) as {
-        result?: { geographies?: { Counties?: Array<{ GEOID?: string; NAME?: string }> } };
-      };
-      const county = censusJson.result?.geographies?.Counties?.[0];
-      if (!county?.GEOID || !county.NAME) {
-        throw new Error("Census did not return a county for that point.");
+      if (!countyFips || !countyName) {
+        throw new Error("Could not resolve county FIPS via Census or Nominatim fallback.");
       }
 
       const data: ResolvedLocation = {
         lat,
         lng,
         formattedAddress: top.display_name,
-        countyFips: county.GEOID,
-        countyName: county.NAME.replace(/ County$/i, ""),
+        countyFips,
+        countyName,
         stateAbbr: "TX",
         // TODO: HUC-12, GCD, PWS lookups via DuckDB snapshots.
         // Add freshness caveats when those snapshots are wired in.
@@ -113,6 +207,7 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
         data,
         caveats: [
           freshnessCaveat({ asOf: new Date().toISOString().slice(0, 10), cadence: "live (geocoder)" }),
+          ...censusCaveats,
           boundsCaveat("Watershed (HUC-12), GCD, and PWS enrichment are not yet wired in."),
         ],
         sources,

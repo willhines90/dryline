@@ -65,17 +65,21 @@ export function ComparisonHero() {
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+      <div className="mt-3 grid grid-cols-[1fr_28px_1fr] items-center gap-3">
         <ScoreCell
           label={primary.location.city}
           sub={primary.location.county + " · " + (primary.mode ?? "personal")}
           score={primary.score.score}
         />
-        <div
-          aria-hidden
-          className="font-mono text-[10px] tracking-[0.22em] uppercase text-tideline whitespace-nowrap"
-        >
-          ← contrast →
+        <div className="flex items-center justify-center">
+          <div className="h-px w-full bg-rule" aria-hidden />
+          <span
+            aria-hidden
+            className="font-mono text-[10px] tracking-[0.16em] uppercase text-tideline px-1 bg-paper"
+          >
+            vs
+          </span>
+          <div className="h-px w-full bg-rule" aria-hidden />
         </div>
         <ScoreCell
           label={secondary.location.city}

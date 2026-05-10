@@ -369,7 +369,7 @@ export function TexasMap({
                 DROUGHT_COLORS[4]!,
                 DROUGHT_COLORS[0]!,
               ],
-              "fill-opacity": 0.22,
+              "fill-opacity": 0.18,
               "fill-outline-color": "#7a5a2c",
             },
           },
@@ -427,10 +427,23 @@ export function TexasMap({
     <div className="relative h-full min-h-0 overflow-hidden bg-foam">
       <div ref={containerRef} className="dryline-map absolute inset-0" />
 
-      <div className="pointer-events-none absolute left-4 top-4 max-w-[260px] rounded-none border border-rule bg-paper/95 px-3 py-2 backdrop-blur-sm shadow-paper">
-        <p className="dryline-label">Texas water · live</p>
-        <p className="font-serif text-[13.5px] text-ink leading-snug mt-1">
-          Drought polygon under everything; reservoirs and demo addresses on top.
+      {/* Drought scale legend (bottom-left). Compact, paper card. */}
+      <div className="pointer-events-none absolute left-4 bottom-4 border border-rule bg-paper/95 backdrop-blur-sm shadow-paper px-3 py-2 max-w-[220px]">
+        <p className="dryline-label mb-1.5">Drought · USDM</p>
+        <div className="flex h-2 mb-1">
+          {DROUGHT_COLORS.map((c, i) => (
+            <div key={i} className="flex-1" style={{ background: c }} />
+          ))}
+        </div>
+        <div className="flex justify-between font-mono text-[8.5px] tracking-[0.16em] uppercase text-tideline">
+          <span>D0</span>
+          <span>D1</span>
+          <span>D2</span>
+          <span>D3</span>
+          <span>D4</span>
+        </div>
+        <p className="font-serif italic text-[11px] text-tideline mt-1.5 leading-snug">
+          None → exceptional. Reservoirs are tide-blue dots; demo pins are mode-colored.
         </p>
       </div>
 

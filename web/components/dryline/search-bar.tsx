@@ -197,6 +197,17 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
         </span>
       </div>
 
+      {open && candidates.length === 0 && q.trim() ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-50">
+          <div className="px-3 py-3 font-serif italic text-[13px] text-tideline">
+            No staged or known address matches <span className="font-mono not-italic text-ink">&ldquo;{q.trim()}&rdquo;</span>.
+          </div>
+          <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-t border-rule">
+            Try a city + county, e.g. <span className="text-ink">Wimberley, Hays</span>.
+          </div>
+        </div>
+      ) : null}
+
       {open && candidates.length > 0 ? (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-50 max-h-[380px] overflow-y-auto">
           <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">

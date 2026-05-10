@@ -44,35 +44,35 @@ export function DrylineScore({ score, className }: DrylineScoreProps) {
           <div className="dryline-label mb-1">Dryline Score</div>
           <div
             className={cn(
-              "font-serif font-medium leading-none tracking-[-0.02em]",
-              "text-[40px]",
+              "font-serif font-medium leading-none tracking-[-0.025em]",
+              "text-[56px]",
               totalColors.text,
             )}
             aria-label={`Dryline Score ${total} out of 100`}
           >
             {total}
-            <span className="font-mono text-tideline text-[13px] tracking-[0.02em] ml-1">/100</span>
+            <span className="font-mono text-tideline text-[15px] tracking-[0.02em] ml-1">/100</span>
           </div>
-          <div className="font-mono text-[9.5px] tracking-[0.18em] uppercase mt-0.5 text-tideline">
+          <div className="font-mono text-[10px] tracking-[0.18em] uppercase mt-1 text-tideline">
             {total >= 60 ? "High stress" : total >= 30 ? "Moderate stress" : "Low stress"}
           </div>
         </div>
 
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-2">
           {order.map((k) => {
             const v = score.subscores[k];
             const colors = bandColors(v);
             return (
-              <div key={k} className="text-[11.5px]">
-                <div className="flex items-baseline justify-between">
+              <div key={k} className="text-[12px]">
+                <div className="flex items-baseline justify-between mb-0.5">
                   <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-tideline">
                     {SUBSCORE_LABELS[k]}
                   </span>
-                  <span className={cn("font-mono text-[10.5px]", colors.text)}>
+                  <span className={cn("font-mono text-[11px]", colors.text)}>
                     {v}
                   </span>
                 </div>
-                <div className="h-1 bg-paper-deep overflow-hidden">
+                <div className="h-2 bg-paper-deep overflow-hidden">
                   <div
                     className={cn("h-full", colors.bar)}
                     style={{ width: `${v}%` }}

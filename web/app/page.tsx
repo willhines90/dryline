@@ -34,6 +34,8 @@ import { StatusFooter } from "@/components/dryline/status-footer";
 import { CompareToggle } from "@/components/dryline/compare-toggle";
 import { ComparisonHero } from "@/components/dryline/comparison-hero";
 import { AboutModal } from "@/components/dryline/about-modal";
+import { AgenticToggle } from "@/components/dryline/agentic-toggle";
+import { TraceSkeleton } from "@/components/dryline/trace-skeleton";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +90,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             />
             <ModeToggle value={globalMode} onChange={setGlobalMode} />
             <CompareToggle />
+            <AgenticToggle />
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
@@ -253,6 +256,11 @@ function DemoAddressList({
                     type="button"
                     onClick={() => startNextAvailable(loc, currentMode)}
                     disabled={nextSlotHint === null}
+                    title={
+                      nextSlotHint === null
+                        ? "Both compare slots are full. Reset one (or toggle Compare off) to investigate a new address."
+                        : `Drop into the ${nextSlotHint} slot.`
+                    }
                     className={cn(
                       "inline-flex items-center gap-2 px-3 py-1.5 border bg-ink text-paper border-ink",
                       "font-mono text-[10px] tracking-[0.18em] uppercase transition-colors",
@@ -263,7 +271,7 @@ function DemoAddressList({
                       ? "→ Secondary"
                       : nextSlotHint === "primary"
                       ? "→ Primary"
-                      : "Both filled"}
+                      : "Both filled · reset to swap"}
                   </button>
                 ) : (
                   <InvestigateButton location={loc} mode={currentMode} />
@@ -287,8 +295,9 @@ interface InvestigationPanelProps {
 }
 
 function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
-  const { location, mode, status, reset, error, score } = useInvestigation();
+  const { location, mode, status, reset, error, score, traces, start } = useInvestigation();
   if (!location) return null;
+  const showSkeleton = status === "streaming" && traces.length === 0;
   return (
     <div className={cn("flex flex-col", compact ? "" : "flex-1 min-h-0 overflow-y-auto")}>
       <header className="px-5 pt-4 pb-3 border-b border-rule">
@@ -351,9 +360,36 @@ function InvestigationPanel({ compact, slotLabel }: InvestigationPanelProps) {
       </header>
 
       <div className="px-5 py-3 space-y-3.5">
+        {status === "error" && error ? (
+          <div className="border border-rust bg-paper-warm px-3 py-2.5 text-[12.5px] text-ink">
+            <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-rust mb-1">
+              Investigation interrupted
+            </div>
+            <div className="font-serif leading-snug mb-2">{error}</div>
+            <button
+              type="button"
+              onClick={() => start(location, mode ?? "personal")}
+              className="font-mono text-[10px] tracking-[0.18em] uppercase border border-ink bg-ink text-paper px-2.5 py-1 mr-2 hover:bg-aquifer hover:border-aquifer transition-colors"
+            >
+              Retry ↻
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              className="font-mono text-[10px] tracking-[0.18em] uppercase border border-ink/40 text-tideline hover:text-ink px-2.5 py-1 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         <section>
-          <div className="dryline-label mb-1.5">Reasoning trace</div>
-          <ReasoningTrace />
+          {showSkeleton ? <TraceSkeleton /> : null}
+          {!showSkeleton ? (
+            <>
+              <div className="dryline-label mb-1.5">Reasoning trace</div>
+              <ReasoningTrace />
+            </>
+          ) : null}
         </section>
         {score ? <DrylineScore score={score} /> : null}
         <section>

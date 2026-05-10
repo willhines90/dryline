@@ -33,21 +33,30 @@ export function ActionsTab() {
 
   if (!artifact) return null;
 
+  const shouldNudge = status === "done" && acknowledged && !open;
+
   return (
     <>
+      {/* Pulsing halo behind the handle, more visible than animate-pulse alone */}
+      {shouldNudge ? (
+        <span
+          aria-hidden
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-20 h-32 w-9 rounded-l-lg bg-aquifer/40 animate-dryline-pulse"
+        />
+      ) : null}
       {/* Edge handle */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
           "fixed right-0 top-1/2 -translate-y-1/2 z-30",
-          "h-32 w-9 rounded-l-lg border border-r-0 border-reservoir-300",
-          "bg-reservoir-700 text-white shadow-md",
+          "h-32 w-9 rounded-l-lg border border-r-0 border-aquifer/60",
+          "bg-aquifer text-paper shadow-paper",
           "flex items-center justify-center",
-          "transition-transform duration-200 hover:bg-reservoir-500",
-          status === "done" && acknowledged && !open ? "animate-pulse" : "",
+          "transition-all duration-200 hover:bg-tide hover:scale-105",
+          shouldNudge ? "ring-2 ring-spring/80 ring-offset-0" : "",
         )}
-        aria-label={open ? "Close actions" : "Open actions"}
+        aria-label={open ? "Close actions" : "Open drafted artifact"}
       >
         <span
           className="font-mono text-[11px] uppercase tracking-[0.32em]"

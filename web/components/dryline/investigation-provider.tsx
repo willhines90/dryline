@@ -57,6 +57,9 @@ interface MultiApi {
   secondary: SlotApi;
   compareMode: boolean;
   setCompareMode(value: boolean): void;
+  /** When true, /api/investigate is hit with ?agent=1 (real LLM-driven tool calling). */
+  agenticMode: boolean;
+  setAgenticMode(value: boolean): void;
   resetAll(): void;
   /** Open `loc` in the next empty slot when compareMode is on, else primary. */
   startNextAvailable(location: DemoLocationWithCoords, modeOverride?: Mode): void;
@@ -200,7 +203,7 @@ function handleEvent(
   }
 }
 
-function useSlotState(): {
+function useSlotState(getAgentic: () => boolean): {
   state: InvestigationState;
   start: SlotApi["start"];
   reset: () => void;
@@ -234,7 +237,8 @@ function useSlotState(): {
       let res: Response;
       try {
         const cleanAddress = `${location.city}, ${location.county}, TX`;
-        res = await fetch("/api/investigate", {
+        const url = getAgentic() ? "/api/investigate?agent=1" : "/api/investigate";
+        res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -290,9 +294,33 @@ function useSlotState(): {
   return { state, start, reset };
 }
 
+const LS_AGENTIC = "dryline.agentic-mode.v1";
+
 export function InvestigationProvider({ children }: { children: React.ReactNode }) {
-  const primarySlot = useSlotState();
-  const secondarySlot = useSlotState();
+  const [agenticMode, setAgenticModeState] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(LS_AGENTIC) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const agenticRef = React.useRef(agenticMode);
+  React.useEffect(() => {
+    agenticRef.current = agenticMode;
+  }, [agenticMode]);
+  const setAgenticMode = React.useCallback((v: boolean) => {
+    setAgenticModeState(v);
+    try {
+      localStorage.setItem(LS_AGENTIC, v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const getAgentic = React.useCallback(() => agenticRef.current, []);
+  const primarySlot = useSlotState(getAgentic);
+  const secondarySlot = useSlotState(getAgentic);
   const [compareMode, setCompareMode] = React.useState(false);
 
   const primary: SlotApi = React.useMemo(
@@ -333,10 +361,12 @@ export function InvestigationProvider({ children }: { children: React.ReactNode 
       secondary,
       compareMode,
       setCompareMode,
+      agenticMode,
+      setAgenticMode,
       resetAll,
       startNextAvailable,
     }),
-    [primary, secondary, compareMode, resetAll, startNextAvailable],
+    [primary, secondary, compareMode, agenticMode, setAgenticMode, resetAll, startNextAvailable],
   );
 
   return <MultiCtx.Provider value={value}>{children}</MultiCtx.Provider>;

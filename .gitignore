@@ -42,3 +42,6 @@ mcp/data/snapshots/
 .tmp/
 .cache/
 coverage/
+
+# Local-only drafts (kept out of the repo)
+LINKEDIN.md

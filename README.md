@@ -8,7 +8,7 @@ Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (
 - **Brainforge / Vicinity Texas Open Data Track**
 - **Agents Track**
 
-**Live demo:** [dryline-web.vercel.app](https://dryline-web.vercel.app/)
+**Live demo:** [dryline.org](https://dryline.org/)
 **Repo:** [github.com/willhines90/dryline](https://github.com/willhines90/dryline)
 
 ---

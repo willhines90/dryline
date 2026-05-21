@@ -5,7 +5,7 @@
 **Tracks:** Brainforge / Vicinity Texas Open Data Track + Agents Track
 **Hackathon:** [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon), May 9–10 2026, Antler ATX
 
-**Live demo:** https://dryline-web.vercel.app/
+**Live demo:** https://dryline.org/
 **Repo:** https://github.com/willhines90/dryline
 **Demo addresses to try:**
 - `Wimberley, Hays, TX` *(Personal mode)* — Trinity Aquifer, drought, Wimberley WSC
@@ -36,4 +36,4 @@ The web demo's hot path imports the same tool registry in-process and dispatches
 
 ## Submission notes
 
-The `OPENAI_API_KEY` for the production deployment was added **post-deadline**. OpenAI key provisioning during the hackathon hit Codex sandbox limitations; the key was set on the live Vercel deployment (https://dryline-web.vercel.app/) immediately after the submission cutoff so judges can run real investigations. All eight MCP data tools fire the same way regardless of OpenAI availability — only the natural-language synthesis card and the optional `?agent=1` LLM-driven tool-calling loop require the OpenAI key. The reasoning trace, citations, caveats, and Dryline Score are all OpenAI-independent.
+The `OPENAI_API_KEY` for the production deployment was added **post-deadline**. OpenAI key provisioning during the hackathon hit Codex sandbox limitations; the key was set on the live deployment (https://dryline.org/) immediately after the submission cutoff so judges can run real investigations. All eight MCP data tools fire the same way regardless of OpenAI availability — only the natural-language synthesis card and the optional `?agent=1` LLM-driven tool-calling loop require the OpenAI key. The reasoning trace, citations, caveats, and Dryline Score are all OpenAI-independent.

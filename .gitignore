@@ -43,5 +43,6 @@ mcp/data/snapshots/
 .cache/
 coverage/
 
-# Local-only drafts (kept out of the repo)
+# Local-only drafts and internal process docs (kept out of the repo)
 LINKEDIN.md
+docs/internal/

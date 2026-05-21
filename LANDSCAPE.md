@@ -118,4 +118,4 @@ Dryline sits in the empty box: address-anchored, water-supply lens, Texas-deep, 
 
 ---
 
-*Companion docs: `PITCH.md` (slide narrative), `DEMO.md` (live demo script), `EXTENSIONS.md` (post-hackathon roadmap), `PROPOSAL.md` (full project spec).*
+*Companion docs: `EXTENSIONS.md` (post-hackathon roadmap), `PROPOSAL.md` (full project spec).*

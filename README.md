@@ -170,10 +170,7 @@ dryline/
 ├── fixtures/             Canonical demo addresses.
 ├── PROPOSAL.md           Project thesis: scope, demo lineup, what not to build.
 ├── LANDSCAPE.md          Competitive analysis: where Dryline sits, what's missing in market.
-├── EXTENSIONS.md         Post-hackathon roadmap.
-├── DEMO.md               Live three-minute demo script (beat sheet).
-├── PITCH.md              Five-minute pitch narrative.
-└── LOOM.md               Recorded demo-video script (~4 min, camera-on, single take).
+└── EXTENSIONS.md         Post-hackathon roadmap.
 ```
 
 ---
@@ -260,10 +257,6 @@ pnpm --filter @dryline/mcp exec \
 - [PROPOSAL.md](./PROPOSAL.md) — full project thesis
 - [LANDSCAPE.md](./LANDSCAPE.md) — competitive analysis & gap framing
 - [EXTENSIONS.md](./EXTENSIONS.md) — post-hackathon roadmap
-- [DEMO.md](./DEMO.md) — live (in-person) demo beat sheet
-- [PITCH.md](./PITCH.md) — five-minute in-person pitch
-- [LOOM.md](./LOOM.md) — recorded Loom demo script (~4 min, camera-on)
-- [SUBMISSION.md](./SUBMISSION.md) — Brainforge + Agents-track submission copy
 
 ---
 

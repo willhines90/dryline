@@ -7,7 +7,7 @@
 **Tracks:** Brainforge / Vicinity Texas Open Data Track (primary) · Agents Track (secondary)
 **Name:** Dryline — named for the meteorological boundary across West Texas where dry continental air meets moist Gulf air. The dryline is the line where Texas weather and Texas water meet, every day.
 **Team:** Solo build; architecture split along `/mcp`, `/skill`, `/web` so a teammate joining mid-stream can take any one piece independently.
-**Build tools:** Codex (hackathon sponsor — OpenAI's terminal-based agentic coding agent) on `/web` · Claude Code on `/mcp` + `/skill` · parallel git worktrees per [`MERGE.md`](./MERGE.md) · solo human merging on main · **Runtime agent:** OpenAI Responses API + MCP
+**Build tools:** Codex (hackathon sponsor — OpenAI's terminal-based agentic coding agent) on `/web` · Claude Code on `/mcp` + `/skill` · parallel git worktrees · solo human merging on main · **Runtime agent:** OpenAI Responses API + MCP
 
 ---
 
@@ -262,7 +262,7 @@ Judges remember the investigation flow, the narrative, the reasoning trace, and 
 ## Resolved decisions
 
 - **Name:** Dryline (above)
-- **Build tools:** Codex on `/web`, Claude Code on `/mcp` + `/skill`, parallel worktrees, human merging on main (per [`MERGE.md`](./MERGE.md)). The two-agents-in-parallel build is itself a credible Agents-track artifact
+- **Build tools:** Codex on `/web`, Claude Code on `/mcp` + `/skill`, parallel worktrees, human merging on main. The two-agents-in-parallel build is itself a credible Agents-track artifact
 - **Runtime agent:** OpenAI Responses API + MCP — Codex is a developer tool, not a production runtime, so these are different layers, not a contradiction
 - **Team posture:** Solo build, with the repo split cleanly along `/mcp`, `/skill`, `/web` so a teammate joining mid-stream can pick up any one piece without stepping on the others
 
@@ -277,4 +277,4 @@ All data is public, accessed via official channels, with sources cited per respo
 
 ---
 
-*Last updated: May 10, 2026. This proposal will be revised as the build progresses; check git history for diffs. Companion docs: [`LANDSCAPE.md`](./LANDSCAPE.md) (competitive analysis), [`PITCH.md`](./PITCH.md) (slide narrative), [`DEMO.md`](./DEMO.md) (in-person live-demo script), [`LOOM.md`](./LOOM.md) (recorded demo-video script), [`EXTENSIONS.md`](./EXTENSIONS.md) (post-hackathon roadmap).*
+*Last updated: May 10, 2026. This proposal will be revised as the build progresses; check git history for diffs. Companion docs: [`LANDSCAPE.md`](./LANDSCAPE.md) (competitive analysis), [`EXTENSIONS.md`](./EXTENSIONS.md) (post-hackathon roadmap).*

@@ -207,7 +207,6 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
             <ExternalLink href="https://dryline.org/">→ Live demo</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline">→ GitHub</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/PROPOSAL.md">→ Proposal</ExternalLink>
-            <ExternalLink href="https://github.com/willhines90/dryline/blob/main/SUBMISSION.md">→ Submission</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/skill/SKILL.md">→ Agent skill</ExternalLink>
           </div>
         </div>

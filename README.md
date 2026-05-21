@@ -213,11 +213,12 @@ Each MCP tool draws from one or more of these. Mirrors [`skill/references/data-s
 
 ### API keys you'll need
 
-**Just one:** an `OPENAI_API_KEY` for the synthesis call (and the optional `?agent=1` tool-calling loop). All eight data tools — USDM, TWDB, USGS NWIS, EPA SDWIS/ECHO, U.S. Census Geocoder, Nominatim — are **free public APIs that require no key or signup**. The full data stack works offline-from-OpenAI; only the natural-language synthesis card and the LLM-driven agent loop need an OpenAI key.
+**Just one:** a `GEMINI_API_KEY` for the synthesis call (and the optional `?agent=1` tool-calling loop). All eight data tools — USDM, TWDB, USGS NWIS, EPA SDWIS/ECHO, U.S. Census Geocoder, Nominatim — are **free public APIs that require no key or signup**. The full data stack works offline-from-Gemini; only the natural-language synthesis card and the LLM-driven agent loop need a Gemini key. Get one at [aistudio.google.com](https://aistudio.google.com/app/apikey).
 
 | Variable | Where it lives | Required? | Notes |
 |---|---|---|---|
-| `OPENAI_API_KEY` | `web/.env.local` | **Yes** | Used by `/api/investigate` for synthesis. Without it, tools still fire, but no synthesis or artifact is generated. |
+| `GEMINI_API_KEY` | `web/.env.local` | **Yes** | Used by `/api/investigate` for synthesis and the agentic loop. Without it, tools still fire, but no synthesis or artifact is generated. |
+| `GEMINI_MODEL` | `web/.env.local` | Optional | Defaults to `gemini-2.5-flash`. Set to `gemini-2.5-pro` if you want higher quality at the cost of latency. |
 | `NOMINATIM_USER_AGENT` | `.env` | Optional | Defaults to `Dryline/0.0.1 (mail@willhin.es)`. Set your own if you fork. |
 | `MCP_TRANSPORT` | `.env` | Optional | `stdio` (default) or `http`. |
 | `DRYLINE_DUCKDB_PATH` | `.env` | Optional | Path to the GWDB snapshot — defaults to `./mcp/data/dryline.duckdb`. |
@@ -229,7 +230,7 @@ pnpm install
 
 # Configure secrets
 cp .env.example .env
-echo 'OPENAI_API_KEY=sk-...' > web/.env.local
+echo 'GEMINI_API_KEY=AIza...' > web/.env.local
 
 # Terminal 1 — MCP server (stdio)
 pnpm dev:mcp

@@ -26,27 +26,30 @@
  *   budget. The agent is still the demo's "front door" via the skill
  *   for any external runtime — Claude Code, Codex, Cursor — talking to
  *   the MCP server over stdio.
+ *
+ *   Model: Gemini (gemini-2.5-flash by default). The synthesis path is a
+ *   single streaming text call. The agentic path (?agent=1) uses Gemini
+ *   function calling with parallel tool calls.
  */
 
-import OpenAI from "openai";
-import type {
-  ResponseFunctionToolCall,
-  ResponseInput,
-  ResponseInputItem,
-  ResponseStreamEvent,
-  Tool,
-} from "openai/resources/responses/responses";
+import {
+  GoogleGenAI,
+  type Content,
+  type FunctionCall,
+  type FunctionDeclaration,
+  type Part,
+} from "@google/genai";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { tools as drylineTools } from "@dryline/mcp/tools";
-import type { Caveat, Source, ToolResult } from "@dryline/mcp/types";
+import type { Source, ToolResult } from "@dryline/mcp/types";
 import { computeDrylineScore } from "@/lib/dryline-score";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-4.1";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SYNTHESIS_TIMEOUT_MS = 60_000;
 const AGENTIC_TIMEOUT_MS = 50_000;
@@ -353,7 +356,7 @@ ${
   headlineStory
     ? `Background context the user came in with (treat as the framing, land it concretely in the data):\n> ${headlineStory}\n\n`
     : ""
-}You have access to six water-data tools. ALWAYS call resolve_location first to get lat/lng + countyFips for downstream tools. Then choose tools based on what the address and the framing call for; you do not have to call all of them. Aim to finish in 6 or fewer tool calls.
+}You have access to eight water-data tools. ALWAYS call resolve_location first to get lat/lng + countyFips for downstream tools. Then choose tools based on what the address and the framing call for; you do not have to call all of them. Aim to finish in 6 or fewer tool calls.
 
 When you have enough data, emit your final assistant text in EXACTLY this structure:
 
@@ -378,7 +381,7 @@ Hard rules — every one is non-negotiable:
 5. If a tool returns data: null or an error caveat, say so explicitly in the synthesis and continue with what you do have.
 6. Cite at least three distinct sources inline.`;
 
-function buildOpenAITools(): Tool[] {
+function buildGeminiFunctionDeclarations(): FunctionDeclaration[] {
   return drylineTools
     .filter((t) => PUBLISHED_TOOL_NAMES.has(t.name))
     .map((t) => {
@@ -389,12 +392,10 @@ function buildOpenAITools(): Tool[] {
       delete parameters.$schema;
       delete parameters.definitions;
       return {
-        type: "function",
         name: t.name,
         description: t.description,
-        parameters,
-        strict: false,
-      } as Tool;
+        parametersJsonSchema: parameters,
+      } satisfies FunctionDeclaration;
     });
 }
 
@@ -404,25 +405,23 @@ async function runAgentic(
   headlineStory: string | null,
   writer: StreamWriter,
 ): Promise<InvestigationCompletion> {
-  if (!process.env.OPENAI_API_KEY) {
-    writer.emit("error", { message: "OPENAI_API_KEY not set on the server. Add it to web/.env.local." });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    writer.emit("error", { message: "GEMINI_API_KEY not set on the server. Add it to web/.env.local." });
     writer.emit("done", {});
     writer.close();
     return { cacheable: false };
   }
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   const skill = await getSkillPrompt();
-  const tools = buildOpenAITools();
+  const functionDeclarations = buildGeminiFunctionDeclarations();
+  const systemInstruction = `${skill}\n\n---\n\n${AGENT_INSTRUCTIONS(mode, headlineStory)}`;
 
-  let inputItems: ResponseInput = [
-    {
-      role: "system",
-      content: `${skill}\n\n---\n\n${AGENT_INSTRUCTIONS(mode, headlineStory)}`,
-    },
+  const contents: Content[] = [
     {
       role: "user",
-      content: `Investigate the water situation at this Texas address: ${address}`,
+      parts: [{ text: `Investigate the water situation at this Texas address: ${address}` }],
     },
   ];
 
@@ -434,85 +433,51 @@ async function runAgentic(
 
   try {
     iterations: for (let iter = 0; iter < AGENTIC_MAX_ITERATIONS; iter++) {
-      const stream = (await client.responses.create(
-        { model: MODEL, input: inputItems, tools, stream: true, parallel_tool_calls: true },
-        { signal: ac.signal },
-      )) as unknown as AsyncIterable<ResponseStreamEvent>;
+      const stream = await ai.models.generateContentStream({
+        model: MODEL,
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ functionDeclarations }],
+          abortSignal: ac.signal,
+        },
+      });
 
-      const pendingCalls = new Map<string, { name: string; argsBuffer: string; emittedStart: boolean }>();
-      const newItems: ResponseInputItem[] = [];
-      const completedCalls: ResponseFunctionToolCall[] = [];
       let textForThisIter = "";
+      const callsForThisIter: FunctionCall[] = [];
+      const seenCallIds = new Set<string>();
+      const seenCallSigs = new Set<string>();
 
-      for await (const event of stream) {
-        switch (event.type) {
-          case "response.output_item.added": {
-            if (event.item.type === "function_call") {
-              pendingCalls.set(event.item.id ?? event.item.call_id, {
-                name: event.item.name,
-                argsBuffer: "",
-                emittedStart: false,
-              });
+      for await (const chunk of stream) {
+        const t = chunk.text;
+        if (t) textForThisIter += t;
+        const calls = chunk.functionCalls;
+        if (calls && calls.length > 0) {
+          for (const call of calls) {
+            if (!call.name) continue;
+            const dedupeKey =
+              call.id ?? `${call.name}::${JSON.stringify(call.args ?? {})}`;
+            if (call.id) {
+              if (seenCallIds.has(call.id)) continue;
+              seenCallIds.add(call.id);
+            } else {
+              if (seenCallSigs.has(dedupeKey)) continue;
+              seenCallSigs.add(dedupeKey);
             }
-            break;
+            callsForThisIter.push(call);
+            writer.emit("tool_start", { toolName: call.name, args: call.args ?? {} });
           }
-          case "response.function_call_arguments.delta": {
-            const c = pendingCalls.get(event.item_id);
-            if (c) c.argsBuffer += event.delta;
-            break;
-          }
-          case "response.function_call_arguments.done": {
-            const c = pendingCalls.get(event.item_id);
-            if (c && !c.emittedStart) {
-              let args: unknown = {};
-              try {
-                args = c.argsBuffer ? JSON.parse(c.argsBuffer) : {};
-              } catch {
-                args = c.argsBuffer;
-              }
-              writer.emit("tool_start", { toolName: c.name, args });
-              c.emittedStart = true;
-              c.argsBuffer = event.arguments;
-            }
-            break;
-          }
-          case "response.output_item.done": {
-            if (event.item.type === "function_call") {
-              completedCalls.push(event.item);
-              newItems.push(event.item);
-            } else if (event.item.type === "message") {
-              newItems.push(event.item);
-            }
-            break;
-          }
-          case "response.output_text.delta":
-            textForThisIter += event.delta;
-            break;
-          case "error": {
-            const message = (event as unknown as { error?: { message?: string }; message?: string })
-              .error?.message ?? (event as unknown as { message?: string }).message ?? "OpenAI stream error";
-            writer.emit("error", { message });
-            break;
-          }
-          default:
-            break;
         }
       }
 
-      if (completedCalls.length === 0) {
+      if (callsForThisIter.length === 0) {
         finalText = textForThisIter || finalText;
         break iterations;
       }
 
       const dispatched = await Promise.all(
-        completedCalls.map(async (call) => {
-          let args: unknown = {};
-          try {
-            args = call.arguments ? JSON.parse(call.arguments) : {};
-          } catch {
-            args = {};
-          }
-          const result = await dispatchTool(call.name, args);
+        callsForThisIter.map(async (call) => {
+          const result = await dispatchTool(call.name!, call.args ?? {});
           collected.push(result.toolResult);
           writer.emit("tool_result", {
             toolName: call.name,
@@ -525,15 +490,23 @@ async function runAgentic(
         }),
       );
 
-      for (const { call, result } of dispatched) {
-        newItems.push({
-          type: "function_call_output",
-          call_id: call.call_id,
-          output: JSON.stringify(result.toolResult),
-        });
+      const modelParts: Part[] = [];
+      if (textForThisIter) modelParts.push({ text: textForThisIter });
+      for (const call of callsForThisIter) {
+        modelParts.push({ functionCall: { id: call.id, name: call.name, args: call.args } });
       }
+      contents.push({ role: "model", parts: modelParts });
 
-      inputItems = [...inputItems, ...newItems];
+      contents.push({
+        role: "user",
+        parts: dispatched.map(({ call, result }) => ({
+          functionResponse: {
+            id: call.id,
+            name: call.name,
+            response: result.toolResult as unknown as Record<string, unknown>,
+          },
+        })),
+      });
     }
   } catch (err) {
     if (ac.signal.aborted) {
@@ -581,8 +554,9 @@ async function runInvestigation(
   humanScaleHook: string | null,
   writer: StreamWriter,
 ): Promise<InvestigationCompletion> {
-  if (!process.env.OPENAI_API_KEY) {
-    writer.emit("error", { message: "OPENAI_API_KEY not set on the server. Add it to web/.env.local." });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    writer.emit("error", { message: "GEMINI_API_KEY not set on the server. Add it to web/.env.local." });
     writer.emit("done", {});
     writer.close();
     return { cacheable: false };
@@ -686,36 +660,29 @@ Tool results (already gathered for you):
 
 ${formatToolResultsForSynthesis(labeledResults)}`;
 
-  const input: ResponseInput = [
-    {
-      role: "system",
-      content: `${skill}\n\n---\n\n${SYNTHESIS_INSTRUCTIONS(mode, headlineStory, humanScaleHook)}`,
-    },
-    { role: "user", content: userMessage },
-  ];
-
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  // Hard timeout on the synthesis call. We've seen single OpenAI calls hang
+  const ai = new GoogleGenAI({ apiKey });
+  const systemInstruction = `${skill}\n\n---\n\n${SYNTHESIS_INSTRUCTIONS(mode, headlineStory, humanScaleHook)}`;
+  // Hard timeout on the synthesis call. We've seen single model calls hang
   // for 2–3 minutes on otherwise-normal requests — unacceptable for a live
   // demo. Abort and emit a graceful error if the model has not finished
   // streaming within the budget.
   const ac = new AbortController();
   const timeoutId = setTimeout(() => ac.abort(), SYNTHESIS_TIMEOUT_MS);
 
-  let stream: AsyncIterable<ResponseStreamEvent>;
+  let stream: AsyncGenerator<{ text?: string }>;
   try {
-    stream = (await client.responses.create(
-      {
-        model: MODEL,
-        input,
-        stream: true,
+    stream = (await ai.models.generateContentStream({
+      model: MODEL,
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      config: {
+        systemInstruction,
+        abortSignal: ac.signal,
       },
-      { signal: ac.signal },
-    )) as unknown as AsyncIterable<ResponseStreamEvent>;
+    })) as AsyncGenerator<{ text?: string }>;
   } catch (err) {
     clearTimeout(timeoutId);
     const message = err instanceof Error ? err.message : String(err);
-    writer.emit("error", { message: `OpenAI call failed: ${message}` });
+    writer.emit("error", { message: `Gemini call failed: ${message}` });
     writer.emit("done", {});
     writer.close();
     return { cacheable: false };
@@ -724,20 +691,9 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
   let finalText = "";
   let timedOut = false;
   try {
-    for await (const event of stream) {
-      switch (event.type) {
-        case "response.output_text.delta":
-          finalText += event.delta;
-          break;
-        case "error": {
-          const message = (event as unknown as { error?: { message?: string }; message?: string })
-            .error?.message ?? (event as unknown as { message?: string }).message ?? "OpenAI stream error";
-          writer.emit("error", { message });
-          break;
-        }
-        default:
-          break;
-      }
+    for await (const chunk of stream) {
+      const t = chunk.text;
+      if (t) finalText += t;
     }
   } catch (err) {
     if (ac.signal.aborted) {
@@ -755,7 +711,7 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
 
   if (timedOut) {
     writer.emit("error", {
-      message: `Synthesis exceeded ${SYNTHESIS_TIMEOUT_MS / 1000}s. OpenAI is slow right now — retry in a few seconds, or hit cache from a prior run.`,
+      message: `Synthesis exceeded ${SYNTHESIS_TIMEOUT_MS / 1000}s. Gemini is slow right now — retry in a few seconds, or hit cache from a prior run.`,
     });
     writer.emit("done", {});
     writer.close();

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@dryline/mcp": "workspace:*",
+    "@google/genai": "^2.5.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@radix-ui/react-slot": "^1.1.0",
     "class-variance-authority": "^0.7.0",
@@ -19,7 +20,6 @@
     "lucide-react": "^0.460.0",
     "maplibre-gl": "^4.7.1",
     "next": "^15.0.3",
-    "openai": "^4.73.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.5.4",

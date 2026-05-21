@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import type { ScorePayload, SubscoreKey } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +113,12 @@ export function DrylineScore({ score, className }: DrylineScoreProps) {
               </div>
             ))}
           </div>
+          <Link
+            href="/methodology"
+            className="inline-block font-mono text-[10px] tracking-[0.16em] uppercase text-aquifer underline decoration-dotted underline-offset-2 hover:text-ink"
+          >
+            → Full methodology
+          </Link>
         </div>
       ) : null}
     </section>

@@ -15,7 +15,7 @@ Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (
 
 ## The 90-second pitch
 
-Texas added 4 million people in five years. Our water didn't keep up. The data is real, public, and federally published — but it's spread across a stack of state and federal agencies, each with a different update cadence, access pattern, and freshness profile. By the time a homeowner finds out their groundwater table dropped twelve feet last decade, or that a new fab three miles upstream just got a discharge permit, the comment window has closed.
+Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. The data is real, public, and federally published — but it's spread across a stack of state and federal agencies, each with a different update cadence, access pattern, and freshness profile. By the time a homeowner finds out their groundwater table dropped twelve feet last decade, or that a new fab three miles upstream just got a discharge permit, the comment window has closed.
 
 Dryline collapses that distance. Type any Texas address. An agent fans out across drought, reservoirs, drinking water, aquifer monitoring, federally-reportable industrial dischargers, stream gauges, and active permits — returning each tool's result with **inline citations and structured caveats**. No black-box answers, no hedged guesses. A 0–100 Dryline Score lands first, a synthesis card lands the situation in 2–4 paragraphs of cited prose, and an inline action card surfaces a drafted civic-action artifact: a watering reminder, a well-outlook briefing, a public comment with a real NPDES permit ID, a letter to a Groundwater Conservation District, or a Public Information Act request.
 

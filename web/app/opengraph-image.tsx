@@ -58,7 +58,7 @@ export default function OpengraphImage() {
               display: "flex",
             }}
           >
-            Texas added 4 million people in five years.
+            Texas added 2.6 million people in five years.
           </div>
           <div
             style={{

@@ -44,7 +44,7 @@ Before you press Record:
 **Energy:** This is the trailer. Slow down on the load-bearing line.
 
 **Verbatim:**
-> "Texas added 4 million people in five years. Our water didn't keep up. The data exists — across TWDB, USGS, EPA, TCEQ — but it's scattered across five sites that don't talk to each other. And the address-based tools you do know — First Street, EJScreen — stop where water supply begins.
+> "Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. The data exists — across TWDB, USGS, EPA, TCEQ — but it's scattered across five sites that don't talk to each other. And the address-based tools you do know — First Street, EJScreen — stop where water supply begins.
 >
 > Dryline is what fills that gap. Type any Texas address. An agent investigates the water situation across six public datasets, cites every claim, and drafts a concrete civic action — usually a public comment on a live TCEQ permit. It's for homeowners who want to know if the water will last, and for citizens and journalists who want to know who's drinking their aquifer."
 

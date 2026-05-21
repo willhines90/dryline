@@ -101,7 +101,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
 
         <div className="px-6 py-5 space-y-5">
           <p className="font-serif text-[17px] leading-relaxed text-ink">
-            <strong className="font-semibold">Texas added 4 million people in five years. Our water didn&apos;t keep up.</strong>{" "}
+            <strong className="font-semibold">Texas added 2.6 million people in five years — more than any other state. Our water didn&apos;t keep up.</strong>{" "}
             The data is real, public, and federally published — but it&apos;s spread across a stack
             of state and federal agencies, each with a different update cadence, access pattern,
             and freshness profile. By the time a homeowner finds out their groundwater table dropped
@@ -203,6 +203,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           </div>
 
           <div className="flex flex-wrap gap-2 pt-3 border-t border-dashed border-rule">
+            <ExternalLink href="/methodology">→ Score methodology</ExternalLink>
             <ExternalLink href="https://dryline-web.vercel.app/">→ Live demo</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline">→ GitHub</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/PROPOSAL.md">→ Proposal</ExternalLink>

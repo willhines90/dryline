@@ -13,7 +13,7 @@
 **Sub-headline:** *Investigate Texas water at any address.*
 
 **Spoken:**
-> "Texas added 4 million people in five years. Our water didn't keep up. A dryline is the meteorological line across Texas where Gulf air meets continental air. We named our project after it."
+> "Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. A dryline is the meteorological line across Texas where Gulf air meets continental air. We named our project after it."
 
 ---
 

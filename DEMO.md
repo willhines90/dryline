@@ -26,12 +26,12 @@ Before you walk on stage:
 ## Demo 0 — Hook (0:00–0:20) · land the line dead-flat
 
 **Verbatim:**
-> "Texas added 4 million people in five years. Our water didn't keep up. First Street tells you flood risk. EJScreen tells you pollution. Neither tells you what's happening to *your* water. Dryline does."
+> "Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. First Street tells you flood risk. EJScreen tells you pollution. Neither tells you what's happening to *your* water. Dryline does."
 
 **On screen:** title card → fade into the live map. Cursor parked off-screen.
 **Discipline:** No theatrics. Pause one full second after "your water." Then click Wimberley.
 
-**Why the callback to First Street and EJScreen matters:** the pitch's slide 4 set up the gap; this hook lets the audience hold the framing in their head while you demo. If you're running short on time and skipped slide 4 in the pitch, you can drop the callback and revert to the shorter version: *"Texas added 4 million people in five years. Our water didn't keep up. Dryline tells you what that means at any address."*
+**Why the callback to First Street and EJScreen matters:** the pitch's slide 4 set up the gap; this hook lets the audience hold the framing in their head while you demo. If you're running short on time and skipped slide 4 in the pitch, you can drop the callback and revert to the shorter version: *"Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. Dryline tells you what that means at any address."*
 
 ---
 
@@ -104,7 +104,7 @@ That's it. No second ask. Hand back to the pitch.
 
 If you forget everything else, land these four:
 
-1. **Hook (Demo 0):** *"Texas added 4 million people in five years. Our water didn't keep up. First Street tells you flood risk. EJScreen tells you pollution. Neither tells you what's happening to your water. Dryline does."*
+1. **Hook (Demo 0):** *"Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. First Street tells you flood risk. EJScreen tells you pollution. Neither tells you what's happening to your water. Dryline does."*
 2. **Demo 2, the tension:** *"It cross-referenced two things on its own — the aquifer is in decline, AND a 4.2 million-gallon-per-day permit was filed nearby in March. No human told it to put those side by side."*
 3. **Demo 2, the hand-off:** *"This is the moment Dryline stops being a tool and starts being an agent. Public data went in. A fileable civic action came out."*
 4. **Demo 3, the modern echo:** *"Same aquifer. Same doctrine. Seventy years later."*

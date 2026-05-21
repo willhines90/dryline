@@ -291,7 +291,7 @@ function useSlotState(getAgentic: () => boolean): {
         setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
       }
     },
-    [],
+    [getAgentic],
   );
 
   return { state, start, reset };

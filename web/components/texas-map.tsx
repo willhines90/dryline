@@ -113,12 +113,37 @@ const DROUGHT_COLORS = ["#cdd9b4", "#cfb27a", "#a85a35", "#6f1d10", "#4a0d05"];
 // DM 0=D0(abnormal), 1=D1(moderate), 2=D2(severe), 3=D3(extreme), 4=D4(exceptional)
 
 const LAYER_SPECS: LayerSpec[] = [
-  { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, filtered to Texas." },
+  { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
   { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
   { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs." },
   { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
-  { key: "aquifers", label: "Aquifer regions", swatch: "#1f4d4a", hint: "Coming soon — TWDB major aquifer polygons.", disabled: true },
+  { key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
 ];
+
+// Per-aquifer fill colors. Earth-tone family so they sit below all
+// the blue water layers without competing for the eye.
+const AQUIFER_COLORS: Record<string, string> = {
+  OGALLALA: "#c9a36a",
+  "EDWARDS-TRINITY": "#7a9b6b",
+  TRINITY: "#a7794a",
+  EDWARDS: "#4a8a72",
+  CARRIZO: "#b58a52",
+  "GULF_COAST": "#9bb5a8",
+  "PECOS VALLEY": "#cdb38a",
+  SEYMOUR: "#8a7a52",
+  "HUECO_BOLSON": "#9c7a52",
+};
+const AQUIFER_LABELS: Record<string, string> = {
+  OGALLALA: "Ogallala",
+  "EDWARDS-TRINITY": "Edwards-Trinity (Plateau)",
+  TRINITY: "Trinity",
+  EDWARDS: "Edwards (Balcones FZ)",
+  CARRIZO: "Carrizo-Wilcox",
+  "GULF_COAST": "Gulf Coast",
+  "PECOS VALLEY": "Pecos Valley",
+  SEYMOUR: "Seymour",
+  "HUECO_BOLSON": "Hueco-Bolson",
+};
 
 type MapLocation = DemoLocation & {
   approxLatLng?: { lat: number; lng: number };
@@ -143,7 +168,15 @@ export function TexasMap({
 }: TexasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
-  const markersRef = useRef<Array<{ marker: MarkerInstance; popup: PopupInstance }>>([]);
+  const markersRef = useRef<
+    Array<{
+      slug: string;
+      marker: MarkerInstance;
+      popup: PopupInstance;
+      dot: HTMLDivElement;
+      pings: HTMLDivElement[];
+    }>
+  >([]);
   const reservoirMarkersRef = useRef<
     Array<{ slug: string; marker: MarkerInstance; element: HTMLDivElement }>
   >([]);
@@ -191,10 +224,27 @@ export function TexasMap({
           attributionControl: false,
         });
         mapRef.current = map;
-        // Attribution moved to top-right (compact "i") so it doesn't sit
-        // on top of our bottom-right LayerControl. NavigationControl
-        // (zoom +/-) intentionally omitted — uncluttered demo chrome.
+        // Attribution as a compact "i" in top-right.
         map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
+        // Zoom +/- and compass on the top-left (out of the way of the
+        // bottom-left legend and bottom-right layer panel). The
+        // visualizePitch flag draws a tilt indicator when the user
+        // rotates with right-click drag.
+        map.addControl(
+          new maplibregl.NavigationControl({
+            showCompass: true,
+            showZoom: true,
+            visualizePitch: false,
+          }),
+          "top-left",
+        );
+        // Scale bar (km on top, mi on bottom would be ideal but
+        // maplibre only supports one unit at a time; "imperial" is
+        // what most visitors expect here).
+        map.addControl(
+          new maplibregl.ScaleControl({ maxWidth: 90, unit: "imperial" }),
+          "top-left",
+        );
 
         map.on("error", (e) => {
           // eslint-disable-next-line no-console
@@ -255,12 +305,28 @@ export function TexasMap({
             wrap.type = "button";
             wrap.setAttribute("aria-label", location.label);
             wrap.style.cssText =
-              "background:transparent;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px;";
+              "background:transparent;border:none;cursor:pointer;padding:0;position:relative;display:flex;align-items:center;justify-content:center;width:22px;height:22px;";
+
+            // Ping rings — three staggered, hidden until the pin
+            // is the focused-active one. CSS keyframes handle the
+            // expanding-fade animation; we just toggle a class.
+            const pingHost = document.createElement("div");
+            pingHost.style.cssText = "position:absolute;inset:0;pointer-events:none;";
+            const pings: HTMLDivElement[] = [];
+            for (let i = 0; i < 3; i++) {
+              const ring = document.createElement("div");
+              ring.className = `dryline-focus-ping${i === 1 ? " delay-1" : i === 2 ? " delay-2" : ""}`;
+              ring.style.background = colors.fill;
+              ring.style.opacity = "0";
+              pingHost.appendChild(ring);
+              pings.push(ring);
+            }
+            wrap.appendChild(pingHost);
 
             const halo = document.createElement("div");
             halo.style.cssText = `position:absolute;width:22px;height:22px;border-radius:99px;background:${colors.fill};opacity:0.18;`;
             const dot = document.createElement("div");
-            dot.style.cssText = `width:12px;height:12px;border-radius:99px;background:${colors.fill};border:2px solid ${colors.ring};box-shadow:0 0 0 1px rgba(7,23,31,0.45);transition:transform 160ms ease;`;
+            dot.style.cssText = `width:12px;height:12px;border-radius:99px;background:${colors.fill};border:2px solid ${colors.ring};box-shadow:0 0 0 1px rgba(7,23,31,0.45);transition:transform 200ms ease, box-shadow 200ms ease;position:relative;z-index:1;`;
             wrap.appendChild(halo);
             wrap.appendChild(dot);
 
@@ -287,7 +353,7 @@ export function TexasMap({
               e.preventDefault();
               onLocationClickRef.current?.(location);
             });
-            markersRef.current.push({ marker, popup });
+            markersRef.current.push({ slug: location.id, marker, popup, dot, pings });
           }
         });
       } catch (err) {
@@ -334,14 +400,51 @@ export function TexasMap({
     else map.once("load", apply);
   }, [focusedLocation]);
 
+  // ---- 2a. Focused address pulse ----
+  // While an investigation is active, the focused pin "pings" — three
+  // staggered expanding rings — and its dot gets a slightly stronger
+  // halo. When idle (no investigation), the focused dot still reads
+  // as larger so users see what they clicked.
+  useEffect(() => {
+    const focusedId = focusedLocation?.id;
+    for (const entry of markersRef.current) {
+      const isFocused = !!focusedId && entry.slug === focusedId;
+      const running = isFocused && !!investigationActive;
+      for (const ring of entry.pings) {
+        ring.classList.toggle("is-running", running);
+        ring.style.opacity = running ? "" : "0";
+      }
+      if (isFocused) {
+        entry.dot.style.transform = running ? "scale(1.32)" : "scale(1.15)";
+        entry.dot.style.boxShadow = running
+          ? "0 0 0 4px rgba(13,59,111,0.28), 0 0 0 1px rgba(7,23,31,0.55)"
+          : "0 0 0 2px rgba(13,59,111,0.22), 0 0 0 1px rgba(7,23,31,0.5)";
+      } else {
+        entry.dot.style.transform = "scale(1)";
+        entry.dot.style.boxShadow = "0 0 0 1px rgba(7,23,31,0.45)";
+      }
+    }
+  }, [focusedLocation, investigationActive]);
+
   // ---- 3. Active investigation overlay (radius disk) ----
+  // While an investigation runs we pulse the disk's fill-opacity and
+  // line-width on a sine-wave loop so the map reads as "thinking."
+  // When idle, we revert to a static dashed ring at lower opacity.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    let pulseFrame: number | null = null;
+    const cancelPulse = () => {
+      if (pulseFrame != null) {
+        cancelAnimationFrame(pulseFrame);
+        pulseFrame = null;
+      }
+    };
     const apply = () => {
       const SRC = "dryline-active-radius";
       const FILL = "dryline-active-radius-fill";
       const STROKE = "dryline-active-radius-stroke";
+      cancelPulse();
       try {
         if (map.getLayer(STROKE)) map.removeLayer(STROKE);
         if (map.getLayer(FILL)) map.removeLayer(FILL);
@@ -372,7 +475,7 @@ export function TexasMap({
         source: SRC,
         paint: {
           "fill-color": "#0d3b6f",
-          "fill-opacity": investigationActive ? 0.08 : 0.04,
+          "fill-opacity": investigationActive ? 0.1 : 0.04,
         },
       });
       map.addLayer({
@@ -381,14 +484,38 @@ export function TexasMap({
         source: SRC,
         paint: {
           "line-color": "#0d3b6f",
-          "line-opacity": investigationActive ? 0.55 : 0.3,
-          "line-width": investigationActive ? 1.5 : 1,
+          "line-opacity": investigationActive ? 0.6 : 0.3,
+          "line-width": investigationActive ? 1.6 : 1,
           "line-dasharray": investigationActive ? [1, 0] : [3, 3],
         },
       });
+      if (!investigationActive) return;
+      const reduceMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion) return;
+      const start = performance.now();
+      const tick = (ts: number) => {
+        // 2.4s breathing cycle. sin returns [-1,1] → normalize to [0,1].
+        const phase = ((ts - start) / 2400) * 2 * Math.PI;
+        const k = (Math.sin(phase) + 1) / 2;
+        try {
+          map.setPaintProperty(FILL, "fill-opacity", 0.07 + k * 0.09); // 0.07–0.16
+          map.setPaintProperty(STROKE, "line-opacity", 0.45 + k * 0.35); // 0.45–0.80
+          map.setPaintProperty(STROKE, "line-width", 1.4 + k * 1.1);   // 1.4–2.5
+        } catch {
+          cancelPulse();
+          return;
+        }
+        pulseFrame = requestAnimationFrame(tick);
+      };
+      pulseFrame = requestAnimationFrame(tick);
     };
     if (mapReadyRef.current) apply();
     else map.once("load", apply);
+    return () => {
+      cancelPulse();
+    };
   }, [focusedLocation, investigationActive]);
 
   // ---- 4. Drought layer (USDM) ----
@@ -423,36 +550,98 @@ export function TexasMap({
         cleanup();
         if (map.getSource(SRC)) return;
         map.addSource(SRC, { type: "geojson", data: fc });
-        map.addLayer(
-          {
-            id: FILL,
-            type: "fill",
-            source: SRC,
-            paint: {
-              "fill-color": [
-                "match",
-                ["coalesce", ["get", "DM"], 0],
-                0,
-                DROUGHT_COLORS[0]!,
-                1,
-                DROUGHT_COLORS[1]!,
-                2,
-                DROUGHT_COLORS[2]!,
-                3,
-                DROUGHT_COLORS[3]!,
-                4,
-                DROUGHT_COLORS[4]!,
-                DROUGHT_COLORS[0]!,
-              ],
-              "fill-opacity": 0.18,
-              "fill-outline-color": "#7a5a2c",
-            },
+        map.addLayer({
+          id: FILL,
+          type: "fill",
+          source: SRC,
+          paint: {
+            "fill-color": [
+              "match",
+              ["coalesce", ["get", "DM"], 0],
+              0,
+              DROUGHT_COLORS[0]!,
+              1,
+              DROUGHT_COLORS[1]!,
+              2,
+              DROUGHT_COLORS[2]!,
+              3,
+              DROUGHT_COLORS[3]!,
+              4,
+              DROUGHT_COLORS[4]!,
+              DROUGHT_COLORS[0]!,
+            ],
+            // Opacity ramps with DM severity so D3/D4 read strongly
+            // and D0/D1 stay quiet. Without this the polygons drown in
+            // the cream basemap inside the TX mask hole.
+            "fill-opacity": [
+              "match",
+              ["coalesce", ["get", "DM"], 0],
+              0, 0.32,
+              1, 0.42,
+              2, 0.5,
+              3, 0.6,
+              4, 0.7,
+              0.4,
+            ],
+            "fill-outline-color": "#7a5a2c",
           },
-          // Insert above the base raster but below any subsequent layers
-          undefined,
-        );
-        // Move drought to bottom of overlay stack so reservoir/address pins sit above
-        // (markers are HTML elements, drawn above all canvas layers regardless).
+        });
+        // Make sure drought sits ABOVE the outside-TX mask but below the
+        // outline strokes so the hole doesn't accidentally hide it. If
+        // the mask isn't mounted yet, this no-ops cleanly.
+        try {
+          if (map.getLayer("dryline-tx-bounds-glow")) {
+            map.moveLayer(FILL, "dryline-tx-bounds-glow");
+          }
+        } catch {
+          /* layer ordering best-effort */
+        }
+
+        // Hover popup naming the DM level. The DM number alone is
+        // unintelligible to first-time viewers — labeling it as
+        // "Severe", "Extreme", etc. makes the layer self-explaining.
+        const ml = await import("maplibre-gl");
+        const popup = new ml.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 8,
+          className: "dryline-drought-popup",
+        });
+        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+          features?: import("maplibre-gl").MapGeoJSONFeature[];
+        };
+        const DM_LABELS = [
+          "D0 · Abnormally dry",
+          "D1 · Moderate drought",
+          "D2 · Severe drought",
+          "D3 · Extreme drought",
+          "D4 · Exceptional drought",
+        ];
+        const onMove = (e: MoveEvt) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const dm = (f.properties as { DM?: number } | null)?.DM ?? 0;
+          const label = DM_LABELS[Math.max(0, Math.min(4, dm))] ?? DM_LABELS[0];
+          const color = DROUGHT_COLORS[Math.max(0, Math.min(4, dm))] ?? DROUGHT_COLORS[0];
+          map.getCanvas().style.cursor = "help";
+          popup
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="padding:5px 9px;display:flex;align-items:center;gap:6px">
+                <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+                <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#07171f">${label}</span>
+              </div>`,
+            )
+            .addTo(map);
+        };
+        const onLeave = () => {
+          map.getCanvas().style.cursor = "";
+          popup.remove();
+        };
+        map.on("mousemove", FILL, onMove);
+        map.on("mouseleave", FILL, onLeave);
+        const handlers = { onMove, onLeave, popup };
+        (map as MapInstance & { __droughtHandlers?: typeof handlers }).__droughtHandlers = handlers;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] drought layer failed:", err);
@@ -461,6 +650,28 @@ export function TexasMap({
 
     return () => {
       cancelled = true;
+      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __droughtHandlers?: {
+            onMove: (e: MoveEvt) => void;
+            onLeave: () => void;
+            popup: PopupInstance;
+          };
+        }
+      ).__droughtHandlers;
+      if (handlers) {
+        try {
+          map.off("mousemove", FILL, handlers.onMove);
+          map.off("mouseleave", FILL, handlers.onLeave);
+          handlers.popup.remove();
+        } catch {
+          /* idempotent */
+        }
+        delete (map as MapInstance & { __droughtHandlers?: unknown }).__droughtHandlers;
+      }
       cleanup();
     };
   }, [layerState.drought, mapReadyState]);
@@ -473,22 +684,32 @@ export function TexasMap({
     }
   }, [layerState.reservoirs, mapReadyState]);
 
-  // ---- 5a. Texas state outline — permanent, always visible. Draws a
-  // thick aquifer-blue (or cyan in dark mode) outline of the state to
-  // make it clear the surface is TX-focused.
+  // ---- 5a. Texas state outline + outside-TX soft mask.
+  //
+  // We render two things from the same source data:
+  //   1. An outside-TX fill that dims everything beyond the state line
+  //      so when the user zooms out the data overlays visually stay
+  //      anchored to Texas instead of sprawling across the continent.
+  //   2. A dashed state outline (with a soft glow underlayer) so the
+  //      border itself reads as deliberate cartography, not a hard
+  //      edge of the data clip.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReadyState) return;
     let cancelled = false;
     const SRC = "dryline-tx-bounds";
+    const MASK_SRC = "dryline-outside-tx-mask";
     const LINE = "dryline-tx-bounds-line";
     const GLOW = "dryline-tx-bounds-glow";
+    const MASK = "dryline-outside-tx-mask-fill";
 
     const cleanup = () => {
       try {
         if (map.getLayer(LINE)) map.removeLayer(LINE);
         if (map.getLayer(GLOW)) map.removeLayer(GLOW);
+        if (map.getLayer(MASK)) map.removeLayer(MASK);
         if (map.getSource(SRC)) map.removeSource(SRC);
+        if (map.getSource(MASK_SRC)) map.removeSource(MASK_SRC);
       } catch {
         /* idempotent */
       }
@@ -496,12 +717,70 @@ export function TexasMap({
 
     (async () => {
       try {
-        const res = await fetch("/tx-bounds.geojson", { cache: "force-cache" });
+        const res = await fetch("/tx-bounds-precise.geojson", { cache: "force-cache" });
         if (cancelled || !res.ok) return;
-        const fc = await res.json();
+        const fc = (await res.json()) as {
+          type: "FeatureCollection";
+          features: Array<{
+            type: "Feature";
+            properties: Record<string, unknown>;
+            geometry:
+              | { type: "Polygon"; coordinates: number[][][] }
+              | { type: "MultiPolygon"; coordinates: number[][][][] };
+          }>;
+        };
         if (cancelled) return;
+        const first = fc.features[0];
+        if (!first) return;
+        // Collect each polygon's outer ring (any holes are intentionally
+        // ignored — TX has none anyway). Used both as holes in the
+        // outside-TX mask polygon and as the source for the outline.
+        const txOuterRings: number[][][] =
+          first.geometry.type === "Polygon"
+            ? [first.geometry.coordinates[0]!]
+            : first.geometry.coordinates.map((p) => p[0]!);
+        // World polygon (lng/lat). MapLibre projects this via Web
+        // Mercator and clamps lat near the poles; the slightly
+        // shrunken band keeps us out of singularities.
+        const worldOuter: number[][] = [
+          [-180, -85],
+          [180, -85],
+          [180, 85],
+          [-180, 85],
+          [-180, -85],
+        ];
+        const maskGeometry = {
+          type: "Polygon" as const,
+          // First ring = exterior, subsequent rings = holes. Each TX
+          // outer ring becomes a hole, so the fill stops at the TX
+          // border on every side.
+          coordinates: [worldOuter, ...txOuterRings],
+        };
+
         cleanup();
-        if (map.getSource(SRC)) return;
+        if (map.getSource(SRC) || map.getSource(MASK_SRC)) return;
+
+        // Mask first (will sit below the outline strokes).
+        map.addSource(MASK_SRC, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: maskGeometry,
+            properties: {},
+          },
+        });
+        map.addLayer({
+          id: MASK,
+          type: "fill",
+          source: MASK_SRC,
+          paint: {
+            "fill-color": dark ? "#040810" : "#ece5d8",
+            "fill-opacity": dark ? 0.78 : 0.65,
+            "fill-antialias": true,
+          },
+        });
+
+        // Outline (precise boundary).
         map.addSource(SRC, { type: "geojson", data: fc });
         map.addLayer({
           id: GLOW,
@@ -509,7 +788,7 @@ export function TexasMap({
           source: SRC,
           paint: {
             "line-color": dark ? "#5fc7ff" : "#0d3b6f",
-            "line-opacity": dark ? 0.45 : 0.18,
+            "line-opacity": dark ? 0.45 : 0.22,
             "line-width": dark ? 8 : 6,
             "line-blur": dark ? 4 : 2,
           },
@@ -520,14 +799,14 @@ export function TexasMap({
           source: SRC,
           paint: {
             "line-color": dark ? "#9ec5cf" : "#0d3b6f",
-            "line-opacity": dark ? 0.95 : 0.7,
+            "line-opacity": dark ? 0.95 : 0.78,
             "line-width": dark ? 1.6 : 1.4,
             "line-dasharray": [4, 2],
           },
         });
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn("[TexasMap] TX bounds layer failed:", err);
+        console.warn("[TexasMap] TX bounds + mask layer failed:", err);
       }
     })();
     return () => {
@@ -613,6 +892,69 @@ export function TexasMap({
             ],
           },
         });
+        // Flow overlay: a thin, sparse, light-toned dash drawn ON TOP
+        // of the solid river stroke. We animate `line-dasharray` in
+        // small steps so the dashes drift downstream — gives the
+        // rivers a faint sense of motion without breaking the solid
+        // line look. Skip if the user prefers reduced motion.
+        const reduceMotion =
+          typeof window !== "undefined" &&
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        map.addLayer({
+          id: `${LINE}-flow`,
+          type: "line",
+          source: SRC,
+          layout: { "line-cap": "butt", "line-join": "round" },
+          paint: {
+            "line-color": dark ? "#e8fbff" : "#cfe1e7",
+            "line-opacity": dark ? 0.65 : 0.55,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              0.6,
+              8,
+              1.2,
+              11,
+              2,
+            ],
+            "line-dasharray": [0, 4, 3],
+          },
+        });
+        let flowFrame: number | null = null;
+        if (!reduceMotion) {
+          // Build a 7-step sequence: a 7-length dash window with a
+          // single dash sliding through it. The 7th frame loops back
+          // to the 0th so the cycle is seamless.
+          const seq: number[][] = [
+            [0, 4, 3],
+            [0.5, 4, 2.5],
+            [1, 4, 2],
+            [1.5, 4, 1.5],
+            [2, 4, 1],
+            [2.5, 4, 0.5],
+            [3, 4, 0],
+          ];
+          let lastStep = -1;
+          let lastTs = performance.now();
+          const tick = (ts: number) => {
+            // Step every ~110ms — slow enough to read as drift, not
+            // jitter. Wall-clock so it's smooth across throttled tabs.
+            if (ts - lastTs > 110) {
+              const step = (lastStep + 1) % seq.length;
+              try {
+                map.setPaintProperty(`${LINE}-flow`, "line-dasharray", seq[step]!);
+              } catch {
+                /* layer removed mid-frame; cleanup will cancel us */
+              }
+              lastStep = step;
+              lastTs = ts;
+            }
+            flowFrame = requestAnimationFrame(tick);
+          };
+          flowFrame = requestAnimationFrame(tick);
+        }
         // Hover-only river name label. We attach a popup via the line
         // hit target rather than full symbol layer (no font glyph
         // dependency on raster basemap).
@@ -647,8 +989,9 @@ export function TexasMap({
         };
         map.on("mousemove", LINE, onMove);
         map.on("mouseleave", LINE, onLeave);
-        // Stash the handlers on the map instance so cleanup can detach them.
-        const handlers = { onMove, onLeave, popup };
+        // Stash the handlers + flow frame id on the map instance so
+        // cleanup can detach them on layer toggle / dark mode flip.
+        const handlers = { onMove, onLeave, popup, flowFrame };
         (map as MapInstance & { __riverHandlers?: typeof handlers }).__riverHandlers = handlers;
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -666,6 +1009,7 @@ export function TexasMap({
             onMove: (e: MoveEvt) => void;
             onLeave: () => void;
             popup: PopupInstance;
+            flowFrame: number | null;
           };
         }
       ).__riverHandlers;
@@ -674,6 +1018,7 @@ export function TexasMap({
           map.off("mousemove", LINE, handlers.onMove);
           map.off("mouseleave", LINE, handlers.onLeave);
           handlers.popup.remove();
+          if (handlers.flowFrame != null) cancelAnimationFrame(handlers.flowFrame);
         } catch {
           /* idempotent */
         }
@@ -685,6 +1030,7 @@ export function TexasMap({
       }
       cleanup();
       try {
+        if (map.getLayer(`${LINE}-flow`)) map.removeLayer(`${LINE}-flow`);
         if (map.getLayer(`${LINE}-glow`)) map.removeLayer(`${LINE}-glow`);
       } catch {
         /* idempotent */
@@ -781,6 +1127,74 @@ export function TexasMap({
             "circle-blur": dark ? 0.15 : 0,
           },
         });
+
+        // Click → popup with site name + current cfs + relative time.
+        const ml = await import("maplibre-gl");
+        const popup = new ml.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          offset: 10,
+          className: "dryline-gauge-popup",
+        });
+        type ClickEvt = import("maplibre-gl").MapMouseEvent & {
+          features?: import("maplibre-gl").MapGeoJSONFeature[];
+        };
+        const escape = (s: string) =>
+          s.replace(/[&<>"']/g, (c) =>
+            c === "&"
+              ? "&amp;"
+              : c === "<"
+              ? "&lt;"
+              : c === ">"
+              ? "&gt;"
+              : c === '"'
+              ? "&quot;"
+              : "&#39;",
+          );
+        const relativeTime = (iso: string | null): string => {
+          if (!iso) return "no recent reading";
+          const t = Date.parse(iso);
+          if (!Number.isFinite(t)) return "unknown";
+          const mins = Math.round((Date.now() - t) / 60000);
+          if (mins < 1) return "just now";
+          if (mins < 60) return `${mins} min ago`;
+          const hrs = Math.round(mins / 60);
+          if (hrs < 24) return `${hrs} hr ago`;
+          const days = Math.round(hrs / 24);
+          return `${days} d ago`;
+        };
+        const onClick = (e: ClickEvt) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const p = f.properties as {
+            siteName?: string;
+            siteCode?: string;
+            cfs?: number | null;
+            ts?: string | null;
+          };
+          const cfsText =
+            p.cfs == null
+              ? "<span style=\"color:#b13a1f\">no current reading</span>"
+              : `<span style=\"font-family:'Geist Mono',monospace;font-size:14px;color:#0d3b6f\">${p.cfs.toLocaleString()} cfs</span>`;
+          const html = `<div style="padding:8px 12px;max-width:240px">
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">USGS gauge · ${escape(p.siteCode ?? "—")}</div>
+            <div style="font-family:'Newsreader',serif;font-size:13.5px;color:#07171f;line-height:1.25;margin-top:3px">${escape(p.siteName ?? "Unknown site")}</div>
+            <div style="margin-top:6px">${cfsText}</div>
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.12em;color:#4a6c78;margin-top:4px">${escape(relativeTime(p.ts ?? null))}</div>
+          </div>`;
+          popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
+        };
+        const onEnter = () => {
+          map.getCanvas().style.cursor = "pointer";
+        };
+        const onLeaveCircles = () => {
+          map.getCanvas().style.cursor = "";
+        };
+        map.on("click", CIRCLES, onClick);
+        map.on("mouseenter", CIRCLES, onEnter);
+        map.on("mouseleave", CIRCLES, onLeaveCircles);
+        const handlers = { onClick, onEnter, onLeaveCircles, popup };
+        (map as MapInstance & { __gaugeHandlers?: typeof handlers }).__gaugeHandlers = handlers;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] gauges layer failed:", err);
@@ -788,9 +1202,172 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
+      type ClickEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __gaugeHandlers?: {
+            onClick: (e: ClickEvt) => void;
+            onEnter: () => void;
+            onLeaveCircles: () => void;
+            popup: PopupInstance;
+          };
+        }
+      ).__gaugeHandlers;
+      if (handlers) {
+        try {
+          map.off("click", CIRCLES, handlers.onClick);
+          map.off("mouseenter", CIRCLES, handlers.onEnter);
+          map.off("mouseleave", CIRCLES, handlers.onLeaveCircles);
+          handlers.popup.remove();
+        } catch {
+          /* idempotent */
+        }
+        delete (
+          map as MapInstance & {
+            __gaugeHandlers?: unknown;
+          }
+        ).__gaugeHandlers;
+      }
       cleanup();
     };
   }, [layerState.gauges, mapReadyState, dark]);
+
+  // ---- 5d. Aquifer regions (TWDB major aquifers, static GeoJSON) ----
+  // Rendered with a low-opacity fill and a dotted outline. Color
+  // family is earth-toned so the layer reads as "land underneath"
+  // rather than competing with the blue water layers above.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-aquifers";
+    const FILL = "dryline-aquifers-fill";
+    const LINE = "dryline-aquifers-line";
+    const cleanup = () => {
+      try {
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* idempotent */
+      }
+    };
+    if (!layerState.aquifers) {
+      cleanup();
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch("/tx-aquifers.geojson", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, { type: "geojson", data: fc });
+        // match expression: map each AQ_NAME to its color.
+        const matchPairs: (string | number)[] = [];
+        for (const [name, color] of Object.entries(AQUIFER_COLORS)) {
+          matchPairs.push(name, color);
+        }
+        map.addLayer({
+          id: FILL,
+          type: "fill",
+          source: SRC,
+          paint: {
+            "fill-color": [
+              "match",
+              ["get", "AQ_NAME"],
+              ...matchPairs,
+              "#9a8a6e",
+            ] as unknown as string,
+            "fill-opacity": dark ? 0.22 : 0.18,
+            "fill-antialias": true,
+          },
+        });
+        map.addLayer({
+          id: LINE,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": [
+              "match",
+              ["get", "AQ_NAME"],
+              ...matchPairs,
+              "#9a8a6e",
+            ] as unknown as string,
+            "line-opacity": dark ? 0.7 : 0.55,
+            "line-width": 0.9,
+            "line-dasharray": [2, 2],
+          },
+        });
+
+        // Hover popup naming the aquifer.
+        const ml = await import("maplibre-gl");
+        const popup = new ml.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 8,
+          className: "dryline-aquifer-popup",
+        });
+        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+          features?: import("maplibre-gl").MapGeoJSONFeature[];
+        };
+        const onMove = (e: MoveEvt) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const raw = (f.properties as { AQ_NAME?: string } | null)?.AQ_NAME ?? "Aquifer";
+          const label = AQUIFER_LABELS[raw] ?? raw;
+          const color = AQUIFER_COLORS[raw] ?? "#9a8a6e";
+          popup
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="padding:5px 9px;display:flex;align-items:center;gap:6px">
+                <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+                <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#07171f">${label} aquifer</span>
+              </div>`,
+            )
+            .addTo(map);
+        };
+        const onLeave = () => popup.remove();
+        map.on("mousemove", FILL, onMove);
+        map.on("mouseleave", FILL, onLeave);
+        const handlers = { onMove, onLeave, popup };
+        (map as MapInstance & { __aquiferHandlers?: typeof handlers }).__aquiferHandlers = handlers;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] aquifer layer failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __aquiferHandlers?: {
+            onMove: (e: MoveEvt) => void;
+            onLeave: () => void;
+            popup: PopupInstance;
+          };
+        }
+      ).__aquiferHandlers;
+      if (handlers) {
+        try {
+          map.off("mousemove", FILL, handlers.onMove);
+          map.off("mouseleave", FILL, handlers.onLeave);
+          handlers.popup.remove();
+        } catch {
+          /* idempotent */
+        }
+        delete (map as MapInstance & { __aquiferHandlers?: unknown }).__aquiferHandlers;
+      }
+      cleanup();
+    };
+  }, [layerState.aquifers, mapReadyState, dark]);
 
   // ---- 6. Storytelling: react to tool_result events ----
   useEffect(() => {

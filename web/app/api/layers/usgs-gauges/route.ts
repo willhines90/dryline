@@ -8,11 +8,25 @@
  */
 
 import type { NextRequest } from "next/server";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { booleanPointInPolygon, point as turfPoint } from "@turf/turf";
+import type { Feature, MultiPolygon, Polygon } from "geojson";
 
 export const runtime = "nodejs";
 export const revalidate = 900; // 15 min
 
-const TX_BBOX = { minLng: -106.65, minLat: 25.84, maxLng: -93.51, maxLat: 36.5 };
+let txClipFeature: Feature<Polygon | MultiPolygon> | null = null;
+async function getTxClipFeature(): Promise<Feature<Polygon | MultiPolygon>> {
+  if (txClipFeature) return txClipFeature;
+  const fp = path.resolve(process.cwd(), "public", "tx-bounds-precise.geojson");
+  const raw = await fs.readFile(fp, "utf-8");
+  const fc = JSON.parse(raw) as { features: Array<Feature<Polygon | MultiPolygon>> };
+  const first = fc.features[0];
+  if (!first) throw new Error("tx-bounds-precise.geojson has no features");
+  txClipFeature = first;
+  return first;
+}
 
 interface NwisTimeSeries {
   sourceInfo?: {
@@ -60,10 +74,13 @@ async function fetchAndPack(): Promise<CachePayload> {
   url.searchParams.set("parameterCd", "00060");
   url.searchParams.set("siteStatus", "active");
 
-  const res = await fetch(url, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 900 },
-  });
+  const [res, txFeature] = await Promise.all([
+    fetch(url, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 900 },
+    }),
+    getTxClipFeature(),
+  ]);
   if (!res.ok) throw new Error(`USGS NWIS ${res.status}`);
   const json = (await res.json()) as NwisResponse;
   const series = json.value?.timeSeries ?? [];
@@ -75,6 +92,12 @@ async function fetchAndPack(): Promise<CachePayload> {
     const lat = ts.sourceInfo?.geoLocation?.geogLocation?.latitude;
     const lng = ts.sourceInfo?.geoLocation?.geogLocation?.longitude;
     if (!siteCode || !siteName || lat == null || lng == null) continue;
+    // stateCd=tx includes coastal/tide sites and a few NWIS-mistagged
+    // points that fall in the Gulf or on the Mexican side of the Rio
+    // Grande. Drop anything that isn't actually inside the Texas
+    // polygon — the user is looking at "Texas stream gauges," not the
+    // platonic set of NWIS sites labeled TX.
+    if (!booleanPointInPolygon(turfPoint([lng, lat]), txFeature)) continue;
     const latest = ts.values?.[0]?.value?.[0];
     let cfs: number | null = null;
     const raw = latest?.value;

@@ -115,3 +115,27 @@
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Focused-address marker: expanding "ping" while an investigation runs.
+   The halo div carries .dryline-focus-active, the ring child carries
+   .dryline-focus-ping (2 staggered rings give a continuous ripple feel). */
+@keyframes dryline-focus-ping {
+  0%   { transform: scale(0.6); opacity: 0.55; }
+  80%  { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.dryline-focus-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 99px;
+  pointer-events: none;
+  transform-origin: center;
+}
+.dryline-focus-ping.is-running { animation: dryline-focus-ping 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+.dryline-focus-ping.is-running.delay-1 { animation-delay: 0.6s; }
+.dryline-focus-ping.is-running.delay-2 { animation-delay: 1.2s; }
+
+/* Subtle drift on the river dasharray so water reads as moving. */
+@keyframes dryline-river-flow {
+  to { stroke-dashoffset: -24; }
+}

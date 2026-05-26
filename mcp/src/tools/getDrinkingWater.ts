@@ -211,8 +211,12 @@ export const getDrinkingWater: DrylineTool<Input, DrinkingWaterOutput> = {
 
       const queryUrl = `${ECHO_BASE}/sdw_rest_services.get_systems?${params.toString()}`;
       const summary = await echoJson<QuerySummary>(queryUrl);
-      const err = summary.Results?.Error?.ErrorMessage;
+      const err = summary?.Results?.Error?.ErrorMessage;
       if (err) throw new Error(`ECHO get_systems: ${err}`);
+      if (!summary?.Results) {
+        const snippet = JSON.stringify(summary).slice(0, 160);
+        throw new Error(`ECHO get_systems: unexpected response shape (no Results): ${snippet}`);
+      }
       const qid = summary.Results.QueryID;
       if (!qid) throw new Error("ECHO get_systems: missing QueryID");
       const version = summary.Results.Version ?? "SDWIS";

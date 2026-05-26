@@ -149,8 +149,12 @@ export const getBigUsersNearby: DrylineTool<Input, BigUsersOutput> = {
       const queryUrl = `${ECHO_BASE}/cwa_rest_services.get_facilities?${params.toString()}`;
 
       const summary = await echoJson<QuerySummary>(queryUrl);
-      const summaryErr = summary.Results?.Error?.ErrorMessage;
+      const summaryErr = summary?.Results?.Error?.ErrorMessage;
       if (summaryErr) throw new Error(`ECHO get_facilities: ${summaryErr}`);
+      if (!summary?.Results) {
+        const snippet = JSON.stringify(summary).slice(0, 160);
+        throw new Error(`ECHO get_facilities: unexpected response shape (no Results): ${snippet}`);
+      }
       const qid = summary.Results.QueryID;
       if (!qid) throw new Error("ECHO get_facilities: missing QueryID");
       const version = summary.Results.Version ?? "CWA";

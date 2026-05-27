@@ -239,7 +239,13 @@ function useSlotState(getAgentic: () => boolean): {
 
       let res: Response;
       try {
-        const cleanAddress = `${location.city}, ${location.county}, TX`;
+        // Build a clean address string for Nominatim. Synthetic
+        // locations (gauges, reservoirs) sometimes don't have a county
+        // — including an empty token leaves "City, , TX" which still
+        // resolves but trips Nominatim's address-detail heuristics.
+        const cleanAddress = location.county
+          ? `${location.city}, ${location.county}, TX`
+          : `${location.city}, TX`;
         const url = getAgentic() ? "/api/investigate?agent=1" : "/api/investigate";
         res = await fetch(url, {
           method: "POST",

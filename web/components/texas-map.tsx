@@ -1390,11 +1390,17 @@ export function TexasMap({
         } else {
           body = `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">No live readings published.</div>`;
         }
-        return `<div style="padding:10px 12px;min-width:200px">
+        const twdbUrl = p.slug
+          ? `https://www.waterdatafortexas.org/reservoirs/individual/${p.slug}`
+          : null;
+        return `<div style="padding:10px 12px;min-width:220px">
           <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div>
           <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;margin-top:2px;line-height:1.2">${p.name ?? "—"}</div>
           ${body}
-          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px;border-top:1px solid #c8d6da;padding-top:6px">Click to investigate ↗</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:8px;border-top:1px solid #c8d6da;padding-top:6px">
+            <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f">Click to investigate ↗</span>
+            ${twdbUrl ? `<a href="${twdbUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">TWDB page ↗</a>` : ""}
+          </div>
         </div>`;
       };
 
@@ -1755,6 +1761,9 @@ export function TexasMap({
         } catch {
           /* idempotent */
         }
+
+        // (river hover popup wired below — kept inside the existing
+        // handler scope where `popup` and `flowFrame` are in scope)
         let flowFrame: number | null = null;
         if (!reduceMotion) {
           // Build a 7-step sequence: a 7-length dash window with a
@@ -1801,6 +1810,15 @@ export function TexasMap({
         type MoveEvt = import("maplibre-gl").MapMouseEvent & {
           features?: import("maplibre-gl").MapGeoJSONFeature[];
         };
+        const escapeRiver = (s: string) =>
+          s.replace(/[&<>"']/g, (c) =>
+            c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+          );
+        const wikipediaSlug = (name: string) =>
+          name
+            .replace(/\(TX\)/i, "(Texas)")
+            .trim()
+            .replace(/\s+/g, "_");
         const onMove = (e: MoveEvt) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -1808,11 +1826,16 @@ export function TexasMap({
             (f.properties as { name?: string; NAME?: string } | null)?.name ??
             (f.properties as { name?: string; NAME?: string } | null)?.NAME ??
             "River";
-          map.getCanvas().style.cursor = "pointer";
+          const slug = wikipediaSlug(name);
+          map.getCanvas().style.cursor = "help";
           popup
             .setLngLat(e.lngLat)
             .setHTML(
-              `<div style="padding:5px 9px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f">${name}</div>`,
+              `<div style="padding:8px 11px;max-width:240px">
+                <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Major river</div>
+                <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escapeRiver(name)}</div>
+                <a href="https://en.wikipedia.org/wiki/${slug}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>
+              </div>`,
             )
             .addTo(map);
         };
@@ -2062,10 +2085,16 @@ export function TexasMap({
           const lat = (e.lngLat as { lat?: number }).lat;
           const lng = (e.lngLat as { lng?: number }).lng;
           if (typeof lat === "number" && typeof lng === "number" && p.siteName) {
+            // USGS site names follow patterns like "Colorado Rv at Austin, TX"
+            // or "Trinity Rv at IH 10 nr Wallisville, TX". The leading
+            // watercourse description isn't geocodable. Extract the
+            // last "<City>, TX" fragment — Nominatim handles that.
+            const cityMatch = p.siteName.match(/([A-Z][a-zA-Z. -]+),\s*TX$/);
+            const cityToken = cityMatch?.[1]?.trim() ?? "Texas";
             const synth: MapLocation = {
               id: `gauge:${p.siteCode ?? `${lat},${lng}`}`,
               label: p.siteName,
-              city: p.siteName.replace(/[,].*$/, "").trim(),
+              city: cityToken,
               county: "",
               region: `USGS gauge ${p.siteCode ?? ""}`.trim(),
               mode: "personal",
@@ -2396,12 +2425,16 @@ export function TexasMap({
           if (!f) return;
           const p = f.properties as { name?: string; huc4?: string; states?: string };
           map.getCanvas().style.cursor = "help";
+          const wbdUrl = p.huc4
+            ? `https://water.usgs.gov/wsc/cat/${p.huc4}.html`
+            : null;
           popup
             .setLngLat(e.lngLat)
-            .setHTML(`<div style="padding:6px 10px;max-width:240px">
+            .setHTML(`<div style="padding:8px 11px;max-width:260px">
               <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">River basin · HUC ${escape(p.huc4 ?? "—")}</div>
               <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.name ?? "—")}</div>
-              ${p.states ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:3px">${escape(p.states)}</div>` : ""}
+              ${p.states ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:3px">States: ${escape(p.states)}</div>` : ""}
+              ${wbdUrl ? `<a href="${wbdUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USGS WBD ↗</a>` : ""}
             </div>`)
             .addTo(map);
         };
@@ -2498,6 +2531,38 @@ export function TexasMap({
             map.moveLayer(LINE, "dryline-outside-tx-mask-fill");
           }
         } catch { /* idempotent */ }
+
+        // Hover popup explains what the corridor is + links out for
+        // depth. Most viewers won't know what a "dryline" is at a glance.
+        const ml = await import("maplibre-gl");
+        const drylinePopup = new ml.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 8,
+          className: "dryline-corridor-popup",
+        });
+        type DryEvt = import("maplibre-gl").MapMouseEvent & {
+          features?: import("maplibre-gl").MapGeoJSONFeature[];
+        };
+        const onDryMove = (e: DryEvt) => {
+          map.getCanvas().style.cursor = "help";
+          drylinePopup
+            .setLngLat(e.lngLat)
+            .setHTML(`<div style="padding:8px 11px;max-width:280px">
+              <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Climate · West Texas</div>
+              <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">Dryline corridor</div>
+              <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;line-height:1.4;margin-top:6px">A meteorological boundary where dry continental air meets moist Gulf air. The engine of West Texas severe weather. This band shows where it most often sets up — today's exact line varies.</div>
+              <a href="https://en.wikipedia.org/wiki/Dryline" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>
+            </div>`)
+            .addTo(map);
+        };
+        const onDryLeave = () => {
+          map.getCanvas().style.cursor = "";
+          drylinePopup.remove();
+        };
+        map.on("mousemove", FILL, onDryMove);
+        map.on("mouseleave", FILL, onDryLeave);
+        (map as MapInstance & { __drylineHandlers?: { onMove: typeof onDryMove; onLeave: typeof onDryLeave; popup: PopupInstance } }).__drylineHandlers = { onMove: onDryMove, onLeave: onDryLeave, popup: drylinePopup };
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] dryline corridor failed:", err);
@@ -2505,6 +2570,22 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
+      type DryEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __drylineHandlers?: { onMove: (e: DryEvt) => void; onLeave: () => void; popup: PopupInstance };
+        }
+      ).__drylineHandlers;
+      if (handlers) {
+        try {
+          map.off("mousemove", FILL, handlers.onMove);
+          map.off("mouseleave", FILL, handlers.onLeave);
+          handlers.popup.remove();
+        } catch { /* idempotent */ }
+        delete (map as MapInstance & { __drylineHandlers?: unknown }).__drylineHandlers;
+      }
       cleanup();
     };
   }, [layerState.dryline, mapReadyState]);

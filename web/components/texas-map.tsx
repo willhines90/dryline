@@ -128,6 +128,50 @@ function reservoirFill(pct: number | null, hist: number | null): {
  * to MapLibre's `map.addImage`. Returns a 2x-density image so it stays
  * crisp on retina displays.
  */
+/**
+ * Make a hover popup clickable. Layer hover handlers normally close the
+ * popup the instant the cursor leaves the layer feature, which means
+ * the user can never move their cursor INTO the popup to click a link
+ * or copy text. This helper wires three things:
+ *
+ *  - `scheduleClose()` — delays the actual remove() by ~280 ms so the
+ *    cursor has time to cross the gap from feature to popup.
+ *  - `cancelClose()` — call this from the feature's mousemove so each
+ *    new event clears any pending close.
+ *  - `bindToElement()` — call after the popup is added to the map so
+ *    mouseenter on the popup itself cancels the timer, and mouseleave
+ *    on the popup closes immediately.
+ *
+ * Returns the controller; the caller wires it into the layer's
+ * `mousemove` / `mouseleave` handlers.
+ */
+function bindPopupHoverPersist(
+  popup: import("maplibre-gl").Popup,
+  closeDelayMs = 280,
+): { cancelClose: () => void; scheduleClose: () => void; bindToElement: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let bound = false;
+  const cancelClose = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    timer = setTimeout(() => {
+      popup.remove();
+      timer = null;
+    }, closeDelayMs);
+  };
+  const bindToElement = () => {
+    if (bound) return;
+    const el = popup.getElement();
+    if (!el) return;
+    el.addEventListener("mouseenter", cancelClose);
+    el.addEventListener("mouseleave", scheduleClose);
+    bound = true;
+  };
+  return { cancelClose, scheduleClose, bindToElement };
+}
+
 function svgToImage(svgString: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -1139,6 +1183,7 @@ export function TexasMap({
           "D3 · Extreme drought",
           "D4 · Exceptional drought",
         ];
+        const persist = bindPopupHoverPersist(popup);
         const onMove = (e: MoveEvt) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -1146,19 +1191,25 @@ export function TexasMap({
           const label = DM_LABELS[Math.max(0, Math.min(4, dm))] ?? DM_LABELS[0];
           const color = DROUGHT_COLORS[Math.max(0, Math.min(4, dm))] ?? DROUGHT_COLORS[0];
           map.getCanvas().style.cursor = "help";
+          persist.cancelClose();
           popup
             .setLngLat(e.lngLat)
             .setHTML(
-              `<div style="padding:5px 9px;display:flex;align-items:center;gap:6px">
-                <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
-                <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#07171f">${label}</span>
+              `<div style="padding:8px 11px;max-width:240px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78">U.S. Drought Monitor</span>
+                </div>
+                <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${label}</div>
+                <a href="https://droughtmonitor.unl.edu/CurrentMap/StateDroughtMonitor.aspx?TX" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USDM Texas map ↗</a>
               </div>`,
             )
             .addTo(map);
+          persist.bindToElement();
         };
         const onLeave = () => {
           map.getCanvas().style.cursor = "";
-          popup.remove();
+          persist.scheduleClose();
         };
         map.on("mousemove", FILL, onMove);
         map.on("mouseleave", FILL, onLeave);
@@ -1404,6 +1455,7 @@ export function TexasMap({
         </div>`;
       };
 
+      const persist = bindPopupHoverPersist(popup);
       const onEnter = (e: ResEvt) => {
         const f = e.features?.[0];
         if (!f) return;
@@ -1412,11 +1464,13 @@ export function TexasMap({
         const coords = g.coordinates;
         const p = f.properties as Parameters<typeof renderPopupHtml>[0];
         map.getCanvas().style.cursor = "pointer";
+        persist.cancelClose();
         popup.setLngLat(coords).setHTML(renderPopupHtml(p)).addTo(map);
+        persist.bindToElement();
       };
       const onLeave = () => {
         map.getCanvas().style.cursor = "";
-        popup.remove();
+        persist.scheduleClose();
       };
       const onClick = (e: ResEvt) => {
         const f = e.features?.[0];
@@ -1819,6 +1873,7 @@ export function TexasMap({
             .replace(/\(TX\)/i, "(Texas)")
             .trim()
             .replace(/\s+/g, "_");
+        const persist = bindPopupHoverPersist(popup);
         const onMove = (e: MoveEvt) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -1828,6 +1883,7 @@ export function TexasMap({
             "River";
           const slug = wikipediaSlug(name);
           map.getCanvas().style.cursor = "help";
+          persist.cancelClose();
           popup
             .setLngLat(e.lngLat)
             .setHTML(
@@ -1838,10 +1894,11 @@ export function TexasMap({
               </div>`,
             )
             .addTo(map);
+          persist.bindToElement();
         };
         const onLeave = () => {
           map.getCanvas().style.cursor = "";
-          popup.remove();
+          persist.scheduleClose();
         };
         map.on("mousemove", LINE, onMove);
         map.on("mouseleave", LINE, onLeave);
@@ -2111,12 +2168,18 @@ export function TexasMap({
             p.cfs == null
               ? "<span style=\"color:#b13a1f\">no current reading</span>"
               : `<span style=\"font-family:'Geist Mono',monospace;font-size:14px;color:#0d3b6f\">${p.cfs.toLocaleString()} cfs</span>`;
-          const html = `<div style="padding:8px 12px;max-width:240px">
+          const usgsUrl = p.siteCode
+            ? `https://waterdata.usgs.gov/nwis/uv?site_no=${escape(p.siteCode)}`
+            : null;
+          const html = `<div style="padding:8px 12px;max-width:260px">
             <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">USGS gauge · ${escape(p.siteCode ?? "—")}</div>
             <div style="font-family:'Newsreader',serif;font-size:13.5px;color:#07171f;line-height:1.25;margin-top:3px">${escape(p.siteName ?? "Unknown site")}</div>
             <div style="margin-top:6px">${cfsText}</div>
             <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.12em;color:#4a6c78;margin-top:4px">${escape(relativeTime(p.ts ?? null))}</div>
-            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:6px;border-top:1px solid #c8d6da;padding-top:4px">Investigating ↗</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;border-top:1px solid #c8d6da;padding-top:4px">
+              <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f">Investigating ↗</span>
+              ${usgsUrl ? `<a href="${usgsUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">USGS NWIS ↗</a>` : ""}
+            </div>
           </div>`;
           popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
         };
@@ -2264,6 +2327,19 @@ export function TexasMap({
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
           );
+        const persist = bindPopupHoverPersist(popup);
+        // Wikipedia slug per major TX aquifer — these articles exist.
+        const aquiferWikiSlug: Record<string, string> = {
+          OGALLALA: "Ogallala_Aquifer",
+          "EDWARDS-TRINITY": "Edwards%E2%80%93Trinity_Aquifer",
+          TRINITY: "Trinity_Aquifer",
+          EDWARDS: "Edwards_Aquifer",
+          CARRIZO: "Carrizo%E2%80%93Wilcox_Aquifer",
+          "GULF_COAST": "Gulf_Coast_Aquifer",
+          "PECOS VALLEY": "Pecos_Valley_aquifer",
+          SEYMOUR: "Seymour_Aquifer",
+          "HUECO_BOLSON": "Hueco_Bolson",
+        };
         const onMove = (e: MoveEvt) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -2271,6 +2347,7 @@ export function TexasMap({
           const label = AQUIFER_LABELS[raw] ?? raw;
           const color = AQUIFER_COLORS[raw] ?? "#9a8a6e";
           const fact = AQUIFER_FACTS[raw];
+          const wikiSlug = aquiferWikiSlug[raw];
           const factBody = fact
             ? `<div style="margin-top:6px;border-top:1px solid #c8d6da;padding-top:6px">
                 <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78">Extent</div>
@@ -2280,6 +2357,10 @@ export function TexasMap({
                 <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12px;color:#4a6c78;line-height:1.4;margin-top:6px">${escape(fact.story)}</div>
               </div>`
             : "";
+          const linkBody = wikiSlug
+            ? `<a href="https://en.wikipedia.org/wiki/${wikiSlug}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>`
+            : "";
+          persist.cancelClose();
           popup
             .setLngLat(e.lngLat)
             .setHTML(
@@ -2290,11 +2371,13 @@ export function TexasMap({
                 </div>
                 <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escape(label)}</div>
                 ${factBody}
+                ${linkBody}
               </div>`,
             )
             .addTo(map);
+          persist.bindToElement();
         };
-        const onLeave = () => popup.remove();
+        const onLeave = () => persist.scheduleClose();
         map.on("mousemove", FILL, onMove);
         map.on("mouseleave", FILL, onLeave);
         const handlers = { onMove, onLeave, popup };
@@ -2420,6 +2503,7 @@ export function TexasMap({
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
           );
+        const persist = bindPopupHoverPersist(popup);
         const onMove = (e: MoveEvt) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -2428,6 +2512,7 @@ export function TexasMap({
           const wbdUrl = p.huc4
             ? `https://water.usgs.gov/wsc/cat/${p.huc4}.html`
             : null;
+          persist.cancelClose();
           popup
             .setLngLat(e.lngLat)
             .setHTML(`<div style="padding:8px 11px;max-width:260px">
@@ -2437,10 +2522,11 @@ export function TexasMap({
               ${wbdUrl ? `<a href="${wbdUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USGS WBD ↗</a>` : ""}
             </div>`)
             .addTo(map);
+          persist.bindToElement();
         };
         const onLeave = () => {
           map.getCanvas().style.cursor = "";
-          popup.remove();
+          persist.scheduleClose();
         };
         map.on("mousemove", FILL, onMove);
         map.on("mouseleave", FILL, onLeave);
@@ -2544,8 +2630,10 @@ export function TexasMap({
         type DryEvt = import("maplibre-gl").MapMouseEvent & {
           features?: import("maplibre-gl").MapGeoJSONFeature[];
         };
+        const persistDryline = bindPopupHoverPersist(drylinePopup);
         const onDryMove = (e: DryEvt) => {
           map.getCanvas().style.cursor = "help";
+          persistDryline.cancelClose();
           drylinePopup
             .setLngLat(e.lngLat)
             .setHTML(`<div style="padding:8px 11px;max-width:280px">
@@ -2555,10 +2643,11 @@ export function TexasMap({
               <a href="https://en.wikipedia.org/wiki/Dryline" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>
             </div>`)
             .addTo(map);
+          persistDryline.bindToElement();
         };
         const onDryLeave = () => {
           map.getCanvas().style.cursor = "";
-          drylinePopup.remove();
+          persistDryline.scheduleClose();
         };
         map.on("mousemove", FILL, onDryMove);
         map.on("mouseleave", FILL, onDryLeave);
@@ -2761,6 +2850,24 @@ export function TexasMap({
               timeZoneName: "short",
             });
           };
+          const persist = bindPopupHoverPersist(popup);
+          // Map event name → Wikipedia slug so the user can read about
+          // the alert type. Falls back to the generic NWS warnings page.
+          const eventSlug = (event: string | undefined): string => {
+            const e = (event ?? "").toLowerCase();
+            if (e.includes("tornado watch")) return "Tornado_watch";
+            if (e.includes("tornado warning")) return "Tornado_warning";
+            if (e.includes("severe thunderstorm warning")) return "Severe_thunderstorm_warning";
+            if (e.includes("severe thunderstorm watch")) return "Severe_thunderstorm_watch";
+            if (e.includes("flash flood warning")) return "Flash_flood_warning";
+            if (e.includes("flash flood watch")) return "Flash_flood_watch";
+            if (e.includes("flood warning")) return "Flood_warning";
+            if (e.includes("flood watch")) return "Flood_watch";
+            if (e.includes("red flag")) return "Red_flag_warning";
+            if (e.includes("heat")) return "Excessive_heat_warning";
+            if (e.includes("winter")) return "Winter_storm_warning";
+            return "Severe_weather_terminology_(United_States)";
+          };
           const onMove = (e: MoveEvt) => {
             const f = e.features?.[0];
             if (!f) return;
@@ -2775,7 +2882,9 @@ export function TexasMap({
               p.bucket && p.bucket in palette
                 ? palette[p.bucket as AlertBucket]
                 : palette.other;
+            const slug = eventSlug(p.event);
             map.getCanvas().style.cursor = "help";
+            persist.cancelClose();
             popup
               .setLngLat(e.lngLat)
               .setHTML(`<div style="padding:8px 11px;max-width:280px">
@@ -2786,12 +2895,17 @@ export function TexasMap({
                 <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.event ?? "Alert")}</div>
                 ${p.areaDesc ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:4px;line-height:1.4">${escape(p.areaDesc)}</div>` : ""}
                 ${p.expires ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:6px">Expires ${escape(fmtExp(p.expires))}</div>` : ""}
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+                  <a href="https://en.wikipedia.org/wiki/${slug}" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Alert type ↗</a>
+                  <a href="https://www.weather.gov/alerts/" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">weather.gov ↗</a>
+                </div>
               </div>`)
               .addTo(map);
+            persist.bindToElement();
           };
           const onLeave = () => {
             map.getCanvas().style.cursor = "";
-            popup.remove();
+            persist.scheduleClose();
           };
           map.on("mousemove", FILL, onMove);
           map.on("mouseleave", FILL, onLeave);

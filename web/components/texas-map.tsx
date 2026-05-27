@@ -163,7 +163,20 @@ interface LayerPopupController {
   cleanup: () => void;
   /** Returns true if the pin was active and now dismissed. */
   unpinIfActive: () => boolean;
+  /** Internal: close own preview without firing leave logic. Used by
+   *  the shared registry so other layers can suppress this one when
+   *  they take over the cursor. */
+  _closePreview: () => void;
+  /** Internal: close own pin (no-op if not pinned). */
+  _closePin: () => void;
 }
+
+// Module-level registry of all active layer popup controllers. The
+// invariant we enforce here: at most ONE preview popup AND at most
+// ONE pinned popup are on the map at a time. Without this, overlapping
+// polygon layers (aquifer + dryline-corridor + drought) stack their
+// previews on top of each other when the cursor sits inside all three.
+const _layerPopupRegistry = new Set<LayerPopupController>();
 
 function setupLayerPopup(
   map: MapInstance,
@@ -184,8 +197,12 @@ function setupLayerPopup(
     className: `dryline-pinned-popup ${opts.className ?? ""}`,
   });
   let isPinned = false;
+  let isPreviewOpen = false;
   pinnedPopup.on("close", () => {
     isPinned = false;
+  });
+  previewPopup.on("close", () => {
+    isPreviewOpen = false;
   });
 
   type Evt = import("maplibre-gl").MapMouseEvent & {
@@ -210,22 +227,38 @@ function setupLayerPopup(
     ) {
       lngLat = new ml.LngLat(g.coordinates[0] as number, g.coordinates[1] as number);
     }
+    // Suppress any other layer's preview before opening ours. Only one
+    // hover-preview at a time.
+    for (const other of _layerPopupRegistry) {
+      if (other !== controller) other._closePreview();
+    }
+    isPreviewOpen = true;
     previewPopup.setLngLat(lngLat).setHTML(opts.previewHtml(f)).addTo(map);
   };
   const onLeave = () => {
     if (isPinned) return;
     map.getCanvas().style.cursor = "";
     previewPopup.remove();
+    isPreviewOpen = false;
   };
   const onClick = (e: Evt) => {
     const f = e.features?.[0];
     if (!f) return;
     e.preventDefault?.();
     previewPopup.remove();
+    isPreviewOpen = false;
     let lngLat = e.lngLat;
     const g = f.geometry as { type?: string; coordinates?: unknown };
     if (g.type === "Point" && Array.isArray(g.coordinates) && g.coordinates.length === 2) {
       lngLat = new ml.LngLat(g.coordinates[0] as number, g.coordinates[1] as number);
+    }
+    // Close any other layer's pin AND preview so the click feels like
+    // a hard "switch focus to this feature" gesture.
+    for (const other of _layerPopupRegistry) {
+      if (other !== controller) {
+        other._closePin();
+        other._closePreview();
+      }
     }
     isPinned = true;
     pinnedPopup.setLngLat(lngLat).setHTML(opts.pinnedHtml(f)).addTo(map);
@@ -249,7 +282,7 @@ function setupLayerPopup(
   map.on("mouseleave", opts.layerId, onLeave);
   map.on("click", opts.layerId, onClick);
 
-  return {
+  const controller: LayerPopupController = {
     cleanup: () => {
       try {
         map.off(opts.hoverEvent, opts.layerId, onHover);
@@ -260,6 +293,7 @@ function setupLayerPopup(
       }
       previewPopup.remove();
       pinnedPopup.remove();
+      _layerPopupRegistry.delete(controller);
     },
     unpinIfActive: () => {
       if (!isPinned) return false;
@@ -267,7 +301,19 @@ function setupLayerPopup(
       isPinned = false;
       return true;
     },
+    _closePreview: () => {
+      if (!isPreviewOpen) return;
+      previewPopup.remove();
+      isPreviewOpen = false;
+    },
+    _closePin: () => {
+      if (!isPinned) return;
+      pinnedPopup.remove();
+      isPinned = false;
+    },
   };
+  _layerPopupRegistry.add(controller);
+  return controller;
 }
 
 function svgToImage(svgString: string): Promise<HTMLImageElement> {

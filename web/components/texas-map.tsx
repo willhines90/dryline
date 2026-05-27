@@ -305,6 +305,11 @@ const LAYER_SPECS: LayerSpec[] = [
   { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs with live % full + 7-day trend." },
   { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
   { key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
+  { key: "basins", label: "River basins", swatch: "#2a5e6a", hint: "TWDB-designated TX river basins (Brazos, Trinity, Nueces, Colorado, Red, Rio Grande, etc.) — your address sits in exactly one.", disabled: true },
+  { key: "gcds", label: "Groundwater districts", swatch: "#8a6e4a", hint: "Texas Groundwater Conservation Districts (~100) — the actual regulatory authority over your well.", disabled: true },
+  { key: "dryline", label: "Dryline corridor", swatch: "#b58a52", hint: "Climatological band across West Texas where the meteorological dryline (dry continental air meets moist Gulf air) most often sets up." },
+  { key: "radar", label: "Precipitation radar", swatch: "#5fc7ff", hint: "Live NEXRAD reflectivity mosaic from NOAA / Iowa State Mesonet. Updates every ~5 min." },
+  { key: "alerts", label: "Active weather alerts", swatch: "#b13a1f", hint: "NWS active alerts in Texas (tornado watches, severe storm warnings, flash flood warnings). Updates every 5 min." },
 ];
 
 // Per-aquifer fill colors. Earth-tone family so they sit below all
@@ -2272,6 +2277,314 @@ export function TexasMap({
       cleanup();
     };
   }, [layerState.aquifers, mapReadyState, dark]);
+
+  // ---- 5e. Dryline corridor (static GeoJSON) ----
+  // A climatological band, not today's forecast. Lives near the
+  // bottom of the stack so other data layers render on top.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-corridor";
+    const FILL = "dryline-corridor-fill";
+    const LINE = "dryline-corridor-line";
+    const cleanup = () => {
+      try {
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch { /* idempotent */ }
+    };
+    if (!layerState.dryline) {
+      cleanup();
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch("/tx-dryline-corridor.geojson", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, { type: "geojson", data: fc });
+        map.addLayer({
+          id: FILL,
+          type: "fill",
+          source: SRC,
+          paint: {
+            "fill-color": "#b58a52",
+            "fill-opacity": 0.18,
+            "fill-antialias": true,
+          },
+        });
+        map.addLayer({
+          id: LINE,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": "#7a5a2c",
+            "line-opacity": 0.6,
+            "line-width": 1.2,
+            "line-dasharray": [3, 2],
+          },
+        });
+        // Sit below the outside-TX mask so the corridor reads as a TX
+        // feature, not an extra-state overlay.
+        try {
+          if (map.getLayer("dryline-outside-tx-mask-fill")) {
+            map.moveLayer(FILL, "dryline-outside-tx-mask-fill");
+            map.moveLayer(LINE, "dryline-outside-tx-mask-fill");
+          }
+        } catch { /* idempotent */ }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] dryline corridor failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [layerState.dryline, mapReadyState]);
+
+  // ---- 5f. NEXRAD precipitation radar (live raster) ----
+  // Iowa State Mesonet tile cache of the NEXRAD N0Q composite. ~5-min
+  // upstream refresh. We force a remount of the source every render
+  // when toggled on so the tiles re-fetch from origin on each open
+  // (Mesonet's tile URLs are static so the browser cache keeps things
+  // honest in between).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    const SRC = "dryline-nexrad";
+    const LAYER = "dryline-nexrad-raster";
+    const cleanup = () => {
+      try {
+        if (map.getLayer(LAYER)) map.removeLayer(LAYER);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch { /* idempotent */ }
+    };
+    if (!layerState.radar) {
+      cleanup();
+      return;
+    }
+    cleanup();
+    map.addSource(SRC, {
+      type: "raster",
+      tiles: [
+        "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '<a href="https://mesonet.agron.iastate.edu/ogc/" target="_blank" rel="noopener">Iowa State Mesonet</a> · NOAA NEXRAD',
+      maxzoom: 10,
+    });
+    map.addLayer({
+      id: LAYER,
+      type: "raster",
+      source: SRC,
+      paint: {
+        "raster-opacity": 0.7,
+      },
+    });
+    // Sit above the basemap but below all the data layers + mask so
+    // it reads as a weather wash, not a top overlay that hides pins.
+    try {
+      const above = ["dryline-usdm-fill", "dryline-outside-tx-mask-fill"].find((id) =>
+        map.getLayer(id),
+      );
+      if (above) map.moveLayer(LAYER, above);
+    } catch { /* idempotent */ }
+    return cleanup;
+  }, [layerState.radar, mapReadyState]);
+
+  // ---- 5g. NWS active weather alerts (live polygons) ----
+  // Polls /api/layers/nws-alerts; the route caches upstream so polling
+  // is cheap. Each alert is a polygon colored by its event bucket
+  // (tornado / severe / flood / winter / heat / other). Hover shows
+  // the alert headline + expiry.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    const SRC = "dryline-alerts";
+    const FILL = "dryline-alerts-fill";
+    const LINE = "dryline-alerts-line";
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const cleanup = () => {
+      try {
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch { /* idempotent */ }
+    };
+    if (!layerState.alerts) {
+      cleanup();
+      return;
+    }
+
+    const palette: Record<string, string> = {
+      tornado: "#6f1d10",
+      severe: "#b13a1f",
+      flood: "#0d3b6f",
+      winter: "#9ec5cf",
+      heat: "#b58a52",
+      other: "#7a5a2c",
+    };
+
+    const load = async () => {
+      try {
+        const res = await fetch("/api/layers/nws-alerts");
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+        const existing = map.getSource(SRC) as
+          | (import("maplibre-gl").GeoJSONSource & { setData: (d: unknown) => void })
+          | undefined;
+        if (existing) {
+          existing.setData(fc);
+        } else {
+          map.addSource(SRC, { type: "geojson", data: fc });
+          map.addLayer({
+            id: FILL,
+            type: "fill",
+            source: SRC,
+            paint: {
+              "fill-color": [
+                "match",
+                ["get", "bucket"],
+                "tornado", palette.tornado,
+                "severe", palette.severe,
+                "flood", palette.flood,
+                "winter", palette.winter,
+                "heat", palette.heat,
+                palette.other,
+              ],
+              "fill-opacity": 0.32,
+            },
+          });
+          map.addLayer({
+            id: LINE,
+            type: "line",
+            source: SRC,
+            paint: {
+              "line-color": [
+                "match",
+                ["get", "bucket"],
+                "tornado", palette.tornado,
+                "severe", palette.severe,
+                "flood", palette.flood,
+                "winter", palette.winter,
+                "heat", palette.heat,
+                palette.other,
+              ],
+              "line-width": 1.4,
+              "line-opacity": 0.85,
+            },
+          });
+          // Sit above other data layers but below the TX mask + outline.
+          try {
+            if (map.getLayer("dryline-outside-tx-mask-fill")) {
+              map.moveLayer(FILL, "dryline-outside-tx-mask-fill");
+              map.moveLayer(LINE, "dryline-outside-tx-mask-fill");
+            }
+          } catch { /* idempotent */ }
+
+          // Hover popup
+          const ml = await import("maplibre-gl");
+          const popup = new ml.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 8,
+            className: "dryline-alert-popup",
+          });
+          type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+            features?: import("maplibre-gl").MapGeoJSONFeature[];
+          };
+          const escape = (s: string) =>
+            s.replace(/[&<>"']/g, (c) =>
+              c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+            );
+          const fmtExp = (iso: string | null) => {
+            if (!iso) return "";
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return iso;
+            return d.toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              timeZoneName: "short",
+            });
+          };
+          const onMove = (e: MoveEvt) => {
+            const f = e.features?.[0];
+            if (!f) return;
+            const p = f.properties as {
+              event?: string;
+              bucket?: string;
+              headline?: string;
+              areaDesc?: string;
+              expires?: string | null;
+            };
+            const color = (p.bucket && palette[p.bucket]) || palette.other;
+            map.getCanvas().style.cursor = "help";
+            popup
+              .setLngLat(e.lngLat)
+              .setHTML(`<div style="padding:8px 11px;max-width:280px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">NWS active alert</span>
+                </div>
+                <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.event ?? "Alert")}</div>
+                ${p.areaDesc ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:4px;line-height:1.4">${escape(p.areaDesc)}</div>` : ""}
+                ${p.expires ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:6px">Expires ${escape(fmtExp(p.expires))}</div>` : ""}
+              </div>`)
+              .addTo(map);
+          };
+          const onLeave = () => {
+            map.getCanvas().style.cursor = "";
+            popup.remove();
+          };
+          map.on("mousemove", FILL, onMove);
+          map.on("mouseleave", FILL, onLeave);
+          (map as MapInstance & { __alertHandlers?: { onMove: typeof onMove; onLeave: typeof onLeave; popup: PopupInstance } }).__alertHandlers = {
+            onMove,
+            onLeave,
+            popup,
+          };
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] nws-alerts failed:", err);
+      }
+    };
+    load();
+    // Refresh every 5 min while the layer is on.
+    pollTimer = setInterval(load, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __alertHandlers?: { onMove: (e: MoveEvt) => void; onLeave: () => void; popup: PopupInstance };
+        }
+      ).__alertHandlers;
+      if (handlers) {
+        try {
+          map.off("mousemove", FILL, handlers.onMove);
+          map.off("mouseleave", FILL, handlers.onLeave);
+          handlers.popup.remove();
+        } catch { /* idempotent */ }
+        delete (map as MapInstance & { __alertHandlers?: unknown }).__alertHandlers;
+      }
+      cleanup();
+    };
+  }, [layerState.alerts, mapReadyState]);
 
   // ---- 6. Storytelling: react to tool_result events ----
   //

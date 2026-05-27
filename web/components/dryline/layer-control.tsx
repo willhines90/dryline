@@ -44,6 +44,7 @@ const LS_KEY = "dryline.layer-toggles.v1";
 export function useLayerToggles(specs: LayerSpec[]): {
   state: Record<LayerKey, boolean>;
   toggle(k: LayerKey): void;
+  setMany(updates: Array<{ key: LayerKey; on: boolean }>): void;
 } {
   const base = React.useMemo(
     () =>
@@ -83,19 +84,34 @@ export function useLayerToggles(specs: LayerSpec[]): {
     });
   }, []);
 
-  return { state, toggle };
+  const setMany = React.useCallback((updates: Array<{ key: LayerKey; on: boolean }>) => {
+    setState((s) => {
+      const next = { ...s };
+      for (const u of updates) next[u.key] = u.on;
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(next));
+      } catch {
+        /* swallow */
+      }
+      return next;
+    });
+  }, []);
+
+  return { state, toggle, setMany };
 }
 
 interface LayerControlProps {
   specs: LayerSpec[];
   state: Record<LayerKey, boolean>;
   onToggle(k: LayerKey): void;
+  /** Bulk-set a list of layer keys to the same on/off state in one update. */
+  onSetMany?(updates: Array<{ key: LayerKey; on: boolean }>): void;
   className?: string;
   /** Match the dark/live cartography variant. */
   dark?: boolean;
 }
 
-export function LayerControl({ specs, state, onToggle, className, dark }: LayerControlProps) {
+export function LayerControl({ specs, state, onToggle, onSetMany, className, dark }: LayerControlProps) {
   const [open, setOpen] = React.useState(true);
   // Preserve the order specs are declared in within each group.
   const byGroup = React.useMemo(() => {
@@ -104,6 +120,25 @@ export function LayerControl({ specs, state, onToggle, className, dark }: LayerC
       .map((g) => ({ key: g, label: GROUP_LABELS[g], specs: specs.filter((s) => s.group === g) }))
       .filter((g) => g.specs.length > 0);
   }, [specs]);
+
+  // For each group: ON if every enabled spec in the group is on, OFF if
+  // all are off, MIXED otherwise. Disabled specs are ignored (they can
+  // never be toggled, so they shouldn't drive group state).
+  const groupState = (specs: LayerSpec[]): "on" | "off" | "mixed" => {
+    const eligible = specs.filter((s) => !s.disabled);
+    if (eligible.length === 0) return "off";
+    const onCount = eligible.filter((s) => state[s.key]).length;
+    if (onCount === 0) return "off";
+    if (onCount === eligible.length) return "on";
+    return "mixed";
+  };
+
+  const onGroupToggle = (groupSpecs: LayerSpec[]) => {
+    if (!onSetMany) return;
+    const eligible = groupSpecs.filter((s) => !s.disabled);
+    const allOn = eligible.every((s) => state[s.key]);
+    onSetMany(eligible.map((s) => ({ key: s.key, on: !allOn })));
+  };
 
   return (
     <div
@@ -129,7 +164,9 @@ export function LayerControl({ specs, state, onToggle, className, dark }: LayerC
       </button>
       {open ? (
         <div className={cn("border-t", dark ? "border-aquifer/40" : "border-rule")}>
-          {byGroup.map((g, gi) => (
+          {byGroup.map((g, gi) => {
+            const gState = groupState(g.specs);
+            return (
             <div
               key={g.key}
               className={cn(
@@ -137,14 +174,36 @@ export function LayerControl({ specs, state, onToggle, className, dark }: LayerC
                 dark ? "border-aquifer/40" : "border-rule",
               )}
             >
-              <div
+              <button
+                type="button"
+                onClick={() => onGroupToggle(g.specs)}
+                disabled={!onSetMany}
                 className={cn(
-                  "px-3 pt-1.5 pb-0.5 font-mono text-[8.5px] tracking-[0.18em] uppercase",
-                  dark ? "text-spring/60" : "text-tideline/80",
+                  "w-full flex items-center justify-between px-3 pt-1.5 pb-1",
+                  "font-mono text-[8.5px] tracking-[0.18em] uppercase",
+                  "transition-colors",
+                  dark ? "text-spring/60 hover:text-spring" : "text-tideline/80 hover:text-ink",
+                  !onSetMany && "cursor-default",
                 )}
+                aria-label={`Toggle ${g.label} layers`}
+                title={onSetMany ? `Toggle all ${g.label.toLowerCase()} layers` : g.label}
               >
-                {g.label}
-              </div>
+                <span>{g.label}</span>
+                {onSetMany ? (
+                  <span
+                    className={cn(
+                      "text-[8px] tracking-[0.16em]",
+                      gState === "on"
+                        ? dark ? "text-paper" : "text-ink"
+                        : gState === "mixed"
+                        ? dark ? "text-spring" : "text-aquifer"
+                        : dark ? "text-spring/50" : "text-tideline/70",
+                    )}
+                  >
+                    {gState === "on" ? "ALL ON" : gState === "mixed" ? "MIXED" : "ALL OFF"}
+                  </span>
+                ) : null}
+              </button>
               <ul>
                 {g.specs.map((s) => (
             <li
@@ -202,7 +261,8 @@ export function LayerControl({ specs, state, onToggle, className, dark }: LayerC
                 ))}
               </ul>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </div>

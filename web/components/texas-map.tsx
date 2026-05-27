@@ -316,7 +316,10 @@ const LAYER_SPECS: LayerSpec[] = [
   { group: "hydrology", key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
   { group: "hydrology", key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
   { group: "hydrology", key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
-  { group: "hydrology", key: "basins", label: "River basins", swatch: "#2a5e6a", hint: "TWDB-designated TX river basins (Brazos, Trinity, Nueces, Colorado, Red, Rio Grande, etc.) — your address sits in exactly one.", disabled: true },
+  // River basins layer pulled — TWDB ArcGIS open-data endpoints return
+  // 400/403 on documented queries; USGS WBD ArcGIS service returns 500
+  // on every query format. Will re-add once a clean GeoJSON source is
+  // found (or hand-bake simplified polygons). Don't ship a broken toggle.
   // ---- Climate ----
   { group: "climate", key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
   { group: "climate", key: "dryline", label: "Dryline corridor", swatch: "#b58a52", hint: "Climatological band across West Texas where the meteorological dryline (dry continental air meets moist Gulf air) most often sets up.", defaultOn: false },
@@ -324,7 +327,8 @@ const LAYER_SPECS: LayerSpec[] = [
   { group: "climate", key: "alerts", label: "Active weather alerts", swatch: "#b13a1f", hint: "NWS active alerts in Texas (tornado watches, severe storm warnings, flash flood warnings). Updates every 5 min.", defaultOn: false },
   // ---- Reference ----
   { group: "reference", key: "samples", label: "Sample addresses", swatch: "#0d3b6f", hint: "Seven sample Texas addresses spanning Hill Country, the I-35 corridor, Trans-Pecos, the Coast, the Panhandle, Far West Texas, and the Edwards recharge zone." },
-  { group: "reference", key: "gcds", label: "Groundwater districts", swatch: "#8a6e4a", hint: "Texas Groundwater Conservation Districts (~100) — the actual regulatory authority over your well.", disabled: true },
+  // GCDs layer pulled — same source issue as river basins. Re-add when
+  // a working data path is identified.
 ];
 
 // Per-aquifer fill colors. Earth-tone family so they sit below all
@@ -456,7 +460,7 @@ export function TexasMap({
     () => new Map(),
   );
 
-  const { state: layerState, toggle: toggleLayer } = useLayerToggles(LAYER_SPECS);
+  const { state: layerState, toggle: toggleLayer, setMany: setManyLayers } = useLayerToggles(LAYER_SPECS);
   const { dark } = useDarkMode();
 
   useEffect(() => {
@@ -2624,6 +2628,7 @@ export function TexasMap({
         specs={LAYER_SPECS}
         state={layerState}
         onToggle={toggleLayer}
+        onSetMany={setManyLayers}
         dark={dark}
         className="pointer-events-auto absolute right-4 bottom-4 w-[230px]"
       />

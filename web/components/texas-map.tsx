@@ -78,7 +78,109 @@ const BASE_STYLE: StyleSpecification = {
   ],
 };
 
-/** Curated set of major TX reservoirs we want pinned on the basemap. */
+/**
+ * Live-data shape returned by `/api/layers/reservoirs`. Same TS shape as the
+ * route's `ReservoirObservation` — kept inline so the web layer doesn't
+ * import server-only code.
+ */
+interface ReservoirObservation {
+  slug: string;
+  name: string;
+  lat: number;
+  lng: number;
+  pctFull: number | null;
+  historicalAvg: number | null;
+  series: Array<{ d: string; v: number }>;
+  trend7d: number | null;
+  lastUpdated: string | null;
+}
+
+/**
+ * Pick a fill color for the reservoir lake glyph based on how its current
+ * percent_full compares to the same-day-of-year historical average.
+ * Same color logic the synthesis card uses, kept in sync by hand.
+ */
+function reservoirFill(pct: number | null, hist: number | null): {
+  fill: string;
+  stroke: string;
+  label: string;
+} {
+  if (pct == null) return { fill: "#9ec5cf", stroke: "#4a6c78", label: "no data" };
+  if (pct < 30) return { fill: "#6f1d10", stroke: "#3a0d05", label: "critical" };
+  if (pct < 50) return { fill: "#a85a35", stroke: "#7a3d21", label: "low" };
+  if (hist != null && pct < hist - 10) return { fill: "#b58a52", stroke: "#7a5a2c", label: "below avg" };
+  if (pct < 75) return { fill: "#4a8aa8", stroke: "#2566a8", label: "moderate" };
+  return { fill: "#0d3b6f", stroke: "#061f3d", label: "near full" };
+}
+
+/**
+ * Build an inline SVG sparkline as an HTML string so we can drop it into
+ * the popup's `setHTML`. Mirrors the SparkLine component used in the side
+ * panel — straight polyline through 7-day percent_full readings with the
+ * historical average as a dashed reference line.
+ */
+function sparklineSvg(
+  series: Array<{ d: string; v: number }>,
+  reference: number | null,
+  opts: { w?: number; h?: number; color?: string } = {},
+): string {
+  const w = opts.w ?? 120;
+  const h = opts.h ?? 28;
+  const color = opts.color ?? "#0d3b6f";
+  if (!series.length) {
+    return `<svg width="${w}" height="${h}" aria-label="No data"><line x1="0" y1="${h / 2}" x2="${w}" y2="${h / 2}" stroke="#9ec5cf" stroke-width="1" stroke-dasharray="2 2"/></svg>`;
+  }
+  const padX = 1;
+  const padY = 3;
+  const innerW = w - padX * 2;
+  const innerH = h - padY * 2;
+  const vs = series.map((p) => p.v);
+  let vmin = Math.min(...vs);
+  let vmax = Math.max(...vs);
+  if (typeof reference === "number") {
+    vmin = Math.min(vmin, reference);
+    vmax = Math.max(vmax, reference);
+  }
+  if (vmin === vmax) {
+    vmin -= 0.5;
+    vmax += 0.5;
+  }
+  const span = vmax - vmin;
+  const step = series.length > 1 ? innerW / (series.length - 1) : 0;
+  const xAt = (i: number) => padX + i * step;
+  const yAt = (v: number) => padY + innerH * (1 - (v - vmin) / span);
+  const d = series.map((p, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yAt(p.v).toFixed(2)}`).join(" ");
+  const last = series[series.length - 1]!;
+  const refLine =
+    typeof reference === "number"
+      ? `<line x1="${padX}" x2="${w - padX}" y1="${yAt(reference).toFixed(2)}" y2="${yAt(reference).toFixed(2)}" stroke="#b58a52" stroke-opacity="0.7" stroke-width="1" stroke-dasharray="2 2"/>`
+      : "";
+  return `<svg width="${w}" height="${h}" aria-label="7-day trend">${refLine}<path d="${d}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${xAt(series.length - 1).toFixed(2)}" cy="${yAt(last.v).toFixed(2)}" r="2.2" fill="${color}"/></svg>`;
+}
+
+/**
+ * Lake-body glyph. An irregular blob outline (a stylized lake shoreline
+ * seen from above) rather than a perfect ellipse so it reads as a
+ * water body rather than a colored sticker. A single highlight ripple
+ * inside hints at the surface without becoming a graphic-design tat.
+ */
+function lakeGlyphHtml(fill: string, stroke: string): string {
+  return `<svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true">
+    <path d="M 4 9 C 1.5 7, 1.8 4.5, 4.5 3.5 C 6.5 2.7, 9 3.2, 11 3 C 13.2 2.8, 15.5 1.8, 17.5 3 C 20 4.4, 21 7, 20 9.5 C 19 12, 16.5 13.2, 14 13.2 C 11.5 13.2, 9 13.8, 6.5 13 C 4 12.2, 2.5 10.8, 4 9 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M 6 7.5 Q 8 6.5, 10 7.5 T 14 7.5 T 17 7.5" fill="none" stroke="#eef2f3" stroke-opacity="0.85" stroke-width="0.9" stroke-linecap="round"/>
+  </svg>`;
+}
+
+/** Teardrop map-pin glyph for demo addresses. Color = mode/live. */
+function teardropPinHtml(fill: string, ring: string): string {
+  return `<svg width="18" height="22" viewBox="0 0 18 22" aria-hidden="true">
+    <path d="M 9 1.5 C 4.5 1.5 1.5 4.8 1.5 9 C 1.5 14.5 9 20.5 9 20.5 C 9 20.5 16.5 14.5 16.5 9 C 16.5 4.8 13.5 1.5 9 1.5 Z" fill="${fill}" stroke="${ring}" stroke-width="1.4"/>
+    <circle cx="9" cy="9" r="2.6" fill="#eef2f3"/>
+  </svg>`;
+}
+
+/** Curated set of major TX reservoirs we used to hard-code; now superseded
+ *  by the live TWDB feed but kept for emergency fallback if the feed fails. */
 const RESERVOIR_PINS: Array<{ name: string; slug: string; lat: number; lng: number }> = [
   { name: "Lake Travis", slug: "travis", lat: 30.391869, lng: -97.907234 },
   { name: "Canyon Lake", slug: "canyon", lat: 29.86883, lng: -98.198898 },
@@ -113,9 +215,10 @@ const DROUGHT_COLORS = ["#cdd9b4", "#cfb27a", "#a85a35", "#6f1d10", "#4a0d05"];
 // DM 0=D0(abnormal), 1=D1(moderate), 2=D2(severe), 3=D3(extreme), 4=D4(exceptional)
 
 const LAYER_SPECS: LayerSpec[] = [
+  { key: "samples", label: "Sample addresses", swatch: "#0d3b6f", hint: "The seven curated demo addresses (Wimberley, Taylor/Samsung, Fort Stockton, Houston, Lubbock, El Paso, San Antonio)." },
   { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
   { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
-  { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs." },
+  { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs with live % full + 7-day trend." },
   { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
   { key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
 ];
@@ -143,6 +246,75 @@ const AQUIFER_LABELS: Record<string, string> = {
   "PECOS VALLEY": "Pecos Valley",
   SEYMOUR: "Seymour",
   "HUECO_BOLSON": "Hueco-Bolson",
+};
+
+/**
+ * Curated one-paragraph briefing per major TX aquifer. Used in the
+ * hover popup so a viewer who doesn't know which aquifer is which can
+ * still understand the stakes at a glance. Sources are the TWDB major
+ * aquifer report (2022) and the cause-area press the dataset is
+ * referenced in (Sierra Club, Texas Living Waters, etc.).
+ */
+interface AquiferFact {
+  extent: string;
+  status: string;
+  story: string;
+}
+const AQUIFER_FACTS: Record<string, AquiferFact> = {
+  OGALLALA: {
+    extent: "Texas Panhandle / High Plains (8 states total)",
+    status: "Declining — irrigation depletion",
+    story:
+      "The canonical American aquifer-depletion story. Saturated thickness has dropped 30–50 ft across much of the TX High Plains since 1950, driven mostly by cotton irrigation. Recharge is negligible at human timescales.",
+  },
+  "EDWARDS-TRINITY": {
+    extent: "West-central Texas / Edwards Plateau",
+    status: "Mixed — local stress in Hill Country",
+    story:
+      "The plateau-side cousin of Edwards proper. Less regulated and less productive than Edwards (Balcones FZ); supports many Hill Country wells. Drought-of-record sensitivity is high.",
+  },
+  TRINITY: {
+    extent: "Hill Country + Cross Timbers / Fort Worth metro",
+    status: "Declining — heavy DFW pumping",
+    story:
+      "Multi-layered (Glen Rose, Hensell, Hosston). DFW and Hill Country growth has pulled levels down ~1.5 ft/yr in several monitoring wells. Hays Trinity GCD and others have limited regulatory authority.",
+  },
+  EDWARDS: {
+    extent: "Balcones Fault Zone — Austin/San Marcos/San Antonio",
+    status: "Regulated — best-managed major aquifer in TX",
+    story:
+      "Most-regulated aquifer in Texas via the Edwards Aquifer Authority. J-17 well (San Antonio) is the public benchmark — pumping rules trigger off its elevation. Comal/San Marcos springs depend on it.",
+  },
+  CARRIZO: {
+    extent: "Wedge across East-Central Texas",
+    status: "Mixed — large; significant municipal + ag use",
+    story:
+      "Carrizo-Wilcox is the largest aquifer system in TX by area. Supplies Austin's south side, Bryan-College Station, and many smaller towns. Some sub-units stressed; others stable.",
+  },
+  GULF_COAST: {
+    extent: "Coastal Plain — Houston, Beaumont, Corpus Christi",
+    status: "Subsidence + saltwater intrusion",
+    story:
+      "Over-pumping caused dramatic subsidence in Houston-Galveston (>10 ft in places); the Harris-Galveston Subsidence District forced conversion to surface water. Saltwater intrusion threatens coastal portions.",
+  },
+  "PECOS VALLEY": {
+    extent: "Trans-Pecos — Pecos and Reeves counties",
+    status: "Stressed — irrigation + Republic Water shipments",
+    story:
+      "Sits beneath the Pecos River basin. The same aquifer Comanche Springs (Fort Stockton) tapped before 1950s irrigation dried them up. Republic Water permits to ship to El Paso are the active fight.",
+  },
+  SEYMOUR: {
+    extent: "Rolling Plains / NW Texas",
+    status: "Locally stressed — small but heavily relied on",
+    story:
+      "A shallow, narrow aquifer along the Brazos and Wichita drainages. Quality issues (nitrate, salinity) limit some areas. Small in extent but critical for the communities atop it.",
+  },
+  "HUECO_BOLSON": {
+    extent: "El Paso + Ciudad Juárez border region",
+    status: "Stable — thanks to desalination + treaty water",
+    story:
+      "Shared with Mexico. The Kay Bailey Hutchison desalination plant (largest inland desal in the U.S.) plus Rio Grande treaty water and aggressive conservation have stabilized levels in recent years — a rare positive story.",
+  },
 };
 
 type MapLocation = DemoLocation & {
@@ -178,12 +350,25 @@ export function TexasMap({
     }>
   >([]);
   const reservoirMarkersRef = useRef<
-    Array<{ slug: string; marker: MarkerInstance; element: HTMLDivElement }>
+    Array<{
+      slug: string;
+      marker: MarkerInstance;
+      popup: PopupInstance;
+      element: HTMLDivElement;
+      lat: number;
+      lng: number;
+      name: string;
+    }>
   >([]);
   const mapReadyRef = useRef(false);
   const [mapReadyState, setMapReadyState] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
   const onLocationClickRef = useRef(onLocationClick);
+  // Live TWDB observations keyed by slug. Used to color reservoir glyphs
+  // and to render rich hover tooltips with sparklines + historical avg.
+  const [reservoirData, setReservoirData] = useState<Map<string, ReservoirObservation>>(
+    () => new Map(),
+  );
 
   const { state: layerState, toggle: toggleLayer } = useLayerToggles(LAYER_SPECS);
   const { dark } = useDarkMode();
@@ -191,6 +376,41 @@ export function TexasMap({
   useEffect(() => {
     onLocationClickRef.current = onLocationClick;
   }, [onLocationClick]);
+
+  // One-shot fetch of live TWDB reservoir state. The Map is keyed by slug
+  // so renderers can look up rich data without juggling array indices.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/layers/reservoirs", { cache: "no-store" });
+        if (!res.ok) {
+          // eslint-disable-next-line no-console
+          console.warn("[reservoirs] api not ok", res.status);
+          return;
+        }
+        const payload = (await res.json()) as { reservoirs?: ReservoirObservation[] };
+        if (cancelled || !payload.reservoirs) return;
+        const map = new Map<string, ReservoirObservation>();
+        for (const r of payload.reservoirs) {
+          map.set(r.slug, r);
+          // Some local pin slugs use `_` where TWDB uses `-` (e.g.
+          // `red_bluff` vs `red-bluff`); index both forms so the renderer
+          // can match either.
+          map.set(r.slug.replace(/-/g, "_"), r);
+        }
+        // eslint-disable-next-line no-console
+        console.log("[reservoirs] loaded", payload.reservoirs.length, "travis-entry=", JSON.stringify(map.get("travis")), "first-entry=", JSON.stringify(payload.reservoirs[0]));
+        setReservoirData(map);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[reservoirs] fetch failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Flip basemap visibility when dark mode toggles.
   useEffect(() => {
@@ -251,53 +471,108 @@ export function TexasMap({
           console.warn("[TexasMap] tile/source error:", e?.error ?? e);
         });
 
+        // MapLibre measures its container exactly once at construction.
+        // If the container's first layout pass is wrong (a common SSR/
+        // hydration hiccup in this app's h-screen + flex layout), the
+        // canvas freezes at that small size and leaves whitespace below
+        // until a window resize wakes it up. A ResizeObserver on the
+        // container forces map.resize() whenever the slot actually
+        // changes size — covers both first-paint and any future layout
+        // shift (sidebar open/close, viewport resize).
+        const containerEl = containerRef.current;
+        if (containerEl && typeof ResizeObserver !== "undefined") {
+          const ro = new ResizeObserver(() => {
+            try {
+              map.resize();
+            } catch {
+              /* map may be torn down */
+            }
+          });
+          ro.observe(containerEl);
+          (map as MapInstance & { __ro?: ResizeObserver }).__ro = ro;
+        }
+        // Belt-and-suspenders: one explicit resize on the next two
+        // animation frames in case the container is still settling.
+        requestAnimationFrame(() => {
+          try { map.resize(); } catch {}
+          requestAnimationFrame(() => {
+            try { map.resize(); } catch {}
+          });
+        });
+
         map.on("load", () => {
           map.fitBounds(TEXAS_BOUNDS, { padding: 36, duration: 0 });
           mapReadyRef.current = true;
           setMapReadyState(true);
 
-          // Reservoirs (bottom of marker stack). Two-layer marker:
-          // an outer water-tinted halo + a crisp inner dot. The halo
-          // is wider so that at low (state-level) zoom the lakes
-          // still read as discrete water bodies rather than dust.
+          // Reservoirs — lake-pebble glyph, colored later by live %-full
+          // status, click triggers a full investigation centered on the
+          // reservoir. We render with neutral colors here and refresh
+          // glyph + tooltip in a second useEffect once TWDB data arrives.
           for (const r of RESERVOIR_PINS) {
-            const wrap = document.createElement("div");
+            const wrap = document.createElement("button");
+            wrap.type = "button";
+            wrap.setAttribute("aria-label", `${r.name} — reservoir`);
             wrap.style.cssText =
-              "position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
-            const halo = document.createElement("div");
-            halo.style.cssText =
-              "position:absolute;width:22px;height:22px;border-radius:99px;background:radial-gradient(circle, rgba(74,138,168,0.45) 0%, rgba(74,138,168,0.0) 70%);transition:transform 200ms ease, opacity 200ms ease;";
-            const dot = document.createElement("div");
-            dot.style.cssText =
-              "width:9px;height:9px;border-radius:99px;background:#4a8aa8;border:2px solid #ecf3f5;box-shadow:0 0 0 1px rgba(7,23,31,0.28);transition:transform 200ms ease, box-shadow 200ms ease;";
-            wrap.appendChild(halo);
-            wrap.appendChild(dot);
-            wrap.title = r.name;
+              "background:transparent;border:none;cursor:pointer;padding:0;position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:18px;";
+            const glyph = document.createElement("div");
+            glyph.style.cssText =
+              "width:22px;height:14px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 0 rgba(7,23,31,0.25));transition:transform 200ms ease;";
+            const initial = reservoirFill(null, null);
+            glyph.innerHTML = lakeGlyphHtml(initial.fill, initial.stroke);
+            wrap.appendChild(glyph);
             const popup = new maplibregl.Popup({
+              anchor: "bottom",
               offset: 14,
               closeButton: false,
               closeOnClick: false,
               className: "dryline-reservoir-popup",
             }).setHTML(
-              `<div style="padding:6px 10px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Major reservoir</div><div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px">${r.name}</div></div>`,
+              `<div style="padding:6px 10px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div><div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px">${r.name}</div><div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px">Loading live data…</div></div>`,
             );
             const marker = new maplibregl.Marker({ element: wrap, anchor: "center" })
               .setLngLat([r.lng, r.lat])
               .addTo(map);
             wrap.addEventListener("mouseenter", () => {
               popup.setLngLat([r.lng, r.lat]).addTo(map);
-              halo.style.transform = "scale(1.4)";
-              dot.style.transform = "scale(1.3)";
+              glyph.style.transform = "scale(1.15)";
             });
             wrap.addEventListener("mouseleave", () => {
               popup.remove();
-              halo.style.transform = "scale(1)";
-              dot.style.transform = "scale(1)";
+              glyph.style.transform = "scale(1)";
             });
-            reservoirMarkersRef.current.push({ slug: r.slug, marker, element: dot });
+            wrap.addEventListener("click", (e) => {
+              e.preventDefault();
+              // Build a synthetic location so the existing investigation
+              // pipeline can be triggered without special-casing the
+              // payload shape. resolve_location will refine the address.
+              const synth: MapLocation = {
+                id: `reservoir:${r.slug}`,
+                label: `${r.name}`,
+                city: r.name.replace(/\b(Lake|Reservoir)\b/gi, "").trim(),
+                county: "",
+                region: "TX reservoir",
+                mode: "transparency",
+                headlineStory: `Investigation centered on ${r.name}.`,
+                approxLatLng: { lat: r.lat, lng: r.lng },
+                live: true,
+              };
+              onLocationClickRef.current?.(synth);
+            });
+            reservoirMarkersRef.current.push({
+              slug: r.slug,
+              marker,
+              popup,
+              element: glyph,
+              lat: r.lat,
+              lng: r.lng,
+              name: r.name,
+            });
           }
 
-          // Demo address pins (top of marker stack)
+          // Demo address pins (top of marker stack) — teardrop shape so
+          // they're visually distinct from the reservoir lake-glyphs and
+          // the small circular gauges below them in the stack.
           for (const location of locations) {
             if (!location.approxLatLng) continue;
             const colors = modeMarker(location.mode, location.live);
@@ -305,13 +580,13 @@ export function TexasMap({
             wrap.type = "button";
             wrap.setAttribute("aria-label", location.label);
             wrap.style.cssText =
-              "background:transparent;border:none;cursor:pointer;padding:0;position:relative;display:flex;align-items:center;justify-content:center;width:22px;height:22px;";
+              "background:transparent;border:none;cursor:pointer;padding:0;position:relative;display:flex;align-items:flex-end;justify-content:center;width:22px;height:26px;";
 
             // Ping rings — three staggered, hidden until the pin
             // is the focused-active one. CSS keyframes handle the
             // expanding-fade animation; we just toggle a class.
             const pingHost = document.createElement("div");
-            pingHost.style.cssText = "position:absolute;inset:0;pointer-events:none;";
+            pingHost.style.cssText = "position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;";
             const pings: HTMLDivElement[] = [];
             for (let i = 0; i < 3; i++) {
               const ring = document.createElement("div");
@@ -323,27 +598,30 @@ export function TexasMap({
             }
             wrap.appendChild(pingHost);
 
-            const halo = document.createElement("div");
-            halo.style.cssText = `position:absolute;width:22px;height:22px;border-radius:99px;background:${colors.fill};opacity:0.18;`;
             const dot = document.createElement("div");
-            dot.style.cssText = `width:12px;height:12px;border-radius:99px;background:${colors.fill};border:2px solid ${colors.ring};box-shadow:0 0 0 1px rgba(7,23,31,0.45);transition:transform 200ms ease, box-shadow 200ms ease;position:relative;z-index:1;`;
-            wrap.appendChild(halo);
+            dot.style.cssText = `width:18px;height:22px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 1px rgba(7,23,31,0.35));transition:transform 200ms ease;position:relative;z-index:1;`;
+            dot.innerHTML = teardropPinHtml(colors.fill, colors.ring);
             wrap.appendChild(dot);
 
             const popup = new maplibregl.Popup({
-              offset: 18,
+              anchor: "bottom",
+              offset: 14,
               closeButton: false,
               closeOnClick: false,
               className: "dryline-demo-popup",
             }).setHTML(
               `<div style="padding:8px 12px;max-width:240px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Sample address · ${location.region}</div><div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;line-height:1.2;margin-top:4px">${location.label}</div><div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${(location as DemoLocation & { headlineStory?: string }).headlineStory ?? ""}</div><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px">Click pin to investigate ↗</div></div>`,
             );
-            const marker = new maplibregl.Marker({ element: wrap, anchor: "center" })
+            // anchor: "bottom" pins the teardrop's *tip* (not its center)
+            // to the lat/lng. Without this the visual tip floats ~10px
+            // south of the actual location and the popup sits awkwardly
+            // far above the pin.
+            const marker = new maplibregl.Marker({ element: wrap, anchor: "bottom" })
               .setLngLat([location.approxLatLng.lng, location.approxLatLng.lat])
               .addTo(map);
             wrap.addEventListener("mouseenter", () => {
               popup.setLngLat([location.approxLatLng!.lng, location.approxLatLng!.lat]).addTo(map);
-              dot.style.transform = "scale(1.18)";
+              dot.style.transform = "scale(1.12)";
             });
             wrap.addEventListener("mouseleave", () => {
               popup.remove();
@@ -375,6 +653,8 @@ export function TexasMap({
       reservoirMarkersRef.current.forEach(({ marker }) => marker.remove());
       reservoirMarkersRef.current = [];
       mapReadyRef.current = false;
+      const ro = (mapRef.current as (MapInstance & { __ro?: ResizeObserver }) | null)?.__ro;
+      ro?.disconnect();
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -586,12 +866,14 @@ export function TexasMap({
             "fill-outline-color": "#7a5a2c",
           },
         });
-        // Make sure drought sits ABOVE the outside-TX mask but below the
-        // outline strokes so the hole doesn't accidentally hide it. If
-        // the mask isn't mounted yet, this no-ops cleanly.
+        // Keep drought BELOW the outside-TX mask so the mask hides any
+        // drought polygon that pokes past the state line. The mask
+        // useEffect also re-positions data layers when *it* mounts —
+        // both directions are needed because either layer can win the
+        // network race.
         try {
-          if (map.getLayer("dryline-tx-bounds-glow")) {
-            map.moveLayer(FILL, "dryline-tx-bounds-glow");
+          if (map.getLayer("dryline-outside-tx-mask-fill")) {
+            map.moveLayer(FILL, "dryline-outside-tx-mask-fill");
           }
         } catch {
           /* layer ordering best-effort */
@@ -676,6 +958,63 @@ export function TexasMap({
     };
   }, [layerState.drought, mapReadyState]);
 
+  // ---- 4b. Reservoir markers: hydrate with live TWDB data ----
+  //
+  // When the TWDB payload arrives (or the markers re-mount after a hot
+  // reload), walk every reservoir marker and update its glyph color +
+  // hover tooltip in place. Keeps the markers cheap to create and
+  // cleanly separates the "render shape" path from the "fetch data"
+  // path.
+  useEffect(() => {
+    if (!mapReadyState) return;
+    for (const entry of reservoirMarkersRef.current) {
+      // Slug normalization: our hardcoded list uses underscores
+      // (`red_bluff`) while TWDB uses hyphens (`red-bluff`); the fetch
+      // effect indexes both forms so either lookup hits.
+      const live =
+        reservoirData.get(entry.slug) ??
+        reservoirData.get(entry.slug.replace(/_/g, "-"));
+      // Update glyph color.
+      const colors = reservoirFill(live?.pctFull ?? null, live?.historicalAvg ?? null);
+      entry.element.innerHTML = lakeGlyphHtml(colors.fill, colors.stroke);
+      // Update popup HTML.
+      const name = live?.name ?? entry.name;
+      let body: string;
+      if (live && live.pctFull != null) {
+        const pct = live.pctFull;
+        const hist = live.historicalAvg ?? null;
+        const t = live.trend7d ?? null;
+        const arrow = t == null ? "" : t > 0.3 ? "↗" : t < -0.3 ? "↘" : "→";
+        const trendLabel =
+          t == null
+            ? ""
+            : `<span style="color:${t > 0 ? "#0d3b6f" : t < 0 ? "#a85a35" : "#4a6c78"}">${arrow} ${t > 0 ? "+" : ""}${t.toFixed(1)} pts / 7d</span>`;
+        const spark = sparklineSvg(live.series, hist, { w: 130, h: 28 });
+        const histLine =
+          hist != null
+            ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">Hist. avg for today: ${hist.toFixed(1)}%</div>`
+            : "";
+        body = `
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <div style="font-family:'Newsreader',serif;font-size:24px;color:${colors.fill};font-weight:600;line-height:1">${pct.toFixed(1)}<span style="font-size:14px;color:#4a6c78;font-weight:400">%</span></div>
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78;padding-top:2px">${colors.label}</div>
+          </div>
+          ${histLine}
+          <div style="margin-top:6px">${spark}</div>
+          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px;display:flex;justify-content:space-between;gap:6px"><span>${trendLabel}</span><span>${live.lastUpdated ?? ""}</span></div>
+        `;
+      } else {
+        body = `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">${live ? "No live readings published yet." : "Live data not in TWDB instantaneous feed."}</div>`;
+      }
+      entry.popup.setHTML(`<div style="padding:10px 12px;min-width:200px">
+        <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div>
+        <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;margin-top:2px;line-height:1.2">${name}</div>
+        ${body}
+        <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px;border-top:1px solid #c8d6da;padding-top:6px">Click to investigate ↗</div>
+      </div>`);
+    }
+  }, [reservoirData, mapReadyState]);
+
   // ---- 5. Reservoir visibility toggle ----
   useEffect(() => {
     for (const { marker } of reservoirMarkersRef.current) {
@@ -683,6 +1022,17 @@ export function TexasMap({
       if (el) el.style.display = layerState.reservoirs ? "" : "none";
     }
   }, [layerState.reservoirs, mapReadyState]);
+
+  // ---- 5-bis. Sample-address visibility toggle ----
+  // The 7 demo address pins (Wimberley, Taylor, Fort Stockton, etc.)
+  // can be hidden to declutter the map when a user is focused on the
+  // live data layers (gauges, reservoirs).
+  useEffect(() => {
+    for (const { marker } of markersRef.current) {
+      const el = marker.getElement();
+      if (el) el.style.display = layerState.samples ? "" : "none";
+    }
+  }, [layerState.samples, mapReadyState]);
 
   // ---- 5a. Texas state outline + outside-TX soft mask.
   //
@@ -804,6 +1154,26 @@ export function TexasMap({
             "line-dasharray": [4, 2],
           },
         });
+        // If any data layers (drought, rivers, gauges, aquifers) were
+        // added BEFORE the mask finished loading, they ended up above
+        // the mask in the stack — which means they're visible outside
+        // Texas. Pull each one below the mask now.
+        const dataLayerIds = [
+          "dryline-usdm-fill",
+          "dryline-rivers-line-glow",
+          "dryline-rivers-line",
+          "dryline-rivers-line-flow",
+          "dryline-gauges-circles",
+          "dryline-aquifers-fill",
+          "dryline-aquifers-line",
+        ];
+        for (const layerId of dataLayerIds) {
+          try {
+            if (map.getLayer(layerId)) map.moveLayer(layerId, MASK);
+          } catch {
+            /* idempotent */
+          }
+        }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] TX bounds + mask layer failed:", err);
@@ -922,6 +1292,18 @@ export function TexasMap({
             "line-dasharray": [0, 4, 3],
           },
         });
+        // Pull rivers below the outside-TX mask so they don't extend
+        // visibly past the state line. Best-effort if the mask layer
+        // hasn't mounted yet — the bounds useEffect will re-order then.
+        try {
+          if (map.getLayer("dryline-outside-tx-mask-fill")) {
+            map.moveLayer(`${LINE}-glow`, "dryline-outside-tx-mask-fill");
+            map.moveLayer(LINE, "dryline-outside-tx-mask-fill");
+            map.moveLayer(`${LINE}-flow`, "dryline-outside-tx-mask-fill");
+          }
+        } catch {
+          /* idempotent */
+        }
         let flowFrame: number | null = null;
         if (!reduceMotion) {
           // Build a 7-step sequence: a 7-length dash window with a
@@ -1045,8 +1427,10 @@ export function TexasMap({
     let cancelled = false;
     const SRC = "dryline-gauges";
     const CIRCLES = "dryline-gauges-circles";
+    const CENTER = "dryline-gauges-center";
     const cleanup = () => {
       try {
+        if (map.getLayer(CENTER)) map.removeLayer(CENTER);
         if (map.getLayer(CIRCLES)) map.removeLayer(CIRCLES);
         if (map.getSource(SRC)) map.removeSource(SRC);
       } catch {
@@ -1089,6 +1473,8 @@ export function TexasMap({
           type: "geojson",
           data: { type: "FeatureCollection", features },
         });
+        // Outer ring: thicker stroke, no fill — reads as a "site marker"
+        // ring rather than a generic colored dot.
         map.addLayer({
           id: CIRCLES,
           type: "circle",
@@ -1099,17 +1485,58 @@ export function TexasMap({
               ["linear"],
               ["zoom"],
               5,
-              dark ? 3 : 2,
+              dark ? 4 : 3.2,
               8,
-              dark ? 4.5 : 3,
+              dark ? 5.5 : 4.5,
               10,
-              dark ? 6 : 4.5,
+              dark ? 7 : 6,
             ],
             // Color by current cfs (step expression on a coalesced number):
             //   < 0.5 cfs (no reading or dry) → muted gray
             //   0.5–49 cfs                    → ochre (low flow)
             //   50–499 cfs                    → river (normal)
             //   ≥ 500 cfs                     → aquifer (high)
+            "circle-color": dark ? "#0a0e16" : "#eef2f3",
+            "circle-stroke-color": [
+              "step",
+              ["coalesce", ["to-number", ["get", "cfs"]], -1],
+              dark ? "#3a4d56" : "#4a6c78",
+              0.5,
+              dark ? "#d6a06a" : "#b58a52",
+              50,
+              dark ? "#7ad6e9" : "#4a8aa8",
+              500,
+              dark ? "#5fc7ff" : "#0d3b6f",
+            ],
+            "circle-stroke-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              dark ? 1.6 : 1.4,
+              10,
+              dark ? 2.2 : 1.8,
+            ],
+            "circle-opacity": dark ? 0.95 : 1,
+          },
+        });
+        // Center dot: small filled circle in the same cfs color, drawn on
+        // top of the hollow ring. Together they read as a target /
+        // measurement-station icon (◎) rather than a generic point.
+        map.addLayer({
+          id: CENTER,
+          type: "circle",
+          source: SRC,
+          paint: {
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              dark ? 1.2 : 1,
+              10,
+              dark ? 2.4 : 2,
+            ],
             "circle-color": [
               "step",
               ["coalesce", ["to-number", ["get", "cfs"]], -1],
@@ -1121,12 +1548,18 @@ export function TexasMap({
               500,
               dark ? "#5fc7ff" : "#0d3b6f",
             ],
-            "circle-stroke-color": dark ? "#0a0e16" : "#eef2f3",
-            "circle-stroke-width": 1,
-            "circle-opacity": dark ? 0.95 : 0.85,
-            "circle-blur": dark ? 0.15 : 0,
+            "circle-opacity": 1,
           },
         });
+        // Pull gauge layers below the outside-TX mask.
+        try {
+          if (map.getLayer("dryline-outside-tx-mask-fill")) {
+            map.moveLayer(CIRCLES, "dryline-outside-tx-mask-fill");
+            map.moveLayer(CENTER, "dryline-outside-tx-mask-fill");
+          }
+        } catch {
+          /* idempotent */
+        }
 
         // Click → popup with site name + current cfs + relative time.
         const ml = await import("maplibre-gl");
@@ -1172,6 +1605,28 @@ export function TexasMap({
             cfs?: number | null;
             ts?: string | null;
           };
+          // Treat the click as an investigation trigger on the gauge's
+          // location. The popup still appears briefly via map.on('click')
+          // but the right-panel investigation is the primary action.
+          const lat = (e.lngLat as { lat?: number }).lat;
+          const lng = (e.lngLat as { lng?: number }).lng;
+          if (typeof lat === "number" && typeof lng === "number" && p.siteName) {
+            const synth: MapLocation = {
+              id: `gauge:${p.siteCode ?? `${lat},${lng}`}`,
+              label: p.siteName,
+              city: p.siteName.replace(/[,].*$/, "").trim(),
+              county: "",
+              region: `USGS gauge ${p.siteCode ?? ""}`.trim(),
+              mode: "personal",
+              headlineStory:
+                p.cfs != null
+                  ? `Investigation centered on USGS gauge ${p.siteCode}: ${p.cfs.toLocaleString()} cfs currently.`
+                  : `Investigation centered on USGS gauge ${p.siteCode}.`,
+              approxLatLng: { lat, lng },
+              live: true,
+            };
+            onLocationClickRef.current?.(synth);
+          }
           const cfsText =
             p.cfs == null
               ? "<span style=\"color:#b13a1f\">no current reading</span>"
@@ -1181,6 +1636,7 @@ export function TexasMap({
             <div style="font-family:'Newsreader',serif;font-size:13.5px;color:#07171f;line-height:1.25;margin-top:3px">${escape(p.siteName ?? "Unknown site")}</div>
             <div style="margin-top:6px">${cfsText}</div>
             <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.12em;color:#4a6c78;margin-top:4px">${escape(relativeTime(p.ts ?? null))}</div>
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:6px;border-top:1px solid #c8d6da;padding-top:4px">Investigating ↗</div>
           </div>`;
           popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
         };
@@ -1303,6 +1759,15 @@ export function TexasMap({
             "line-dasharray": [2, 2],
           },
         });
+        // Pull aquifer fill + line below the outside-TX mask.
+        try {
+          if (map.getLayer("dryline-outside-tx-mask-fill")) {
+            map.moveLayer(FILL, "dryline-outside-tx-mask-fill");
+            map.moveLayer(LINE, "dryline-outside-tx-mask-fill");
+          }
+        } catch {
+          /* idempotent */
+        }
 
         // Hover popup naming the aquifer.
         const ml = await import("maplibre-gl");
@@ -1315,18 +1780,36 @@ export function TexasMap({
         type MoveEvt = import("maplibre-gl").MapMouseEvent & {
           features?: import("maplibre-gl").MapGeoJSONFeature[];
         };
+        const escape = (s: string) =>
+          s.replace(/[&<>"']/g, (c) =>
+            c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+          );
         const onMove = (e: MoveEvt) => {
           const f = e.features?.[0];
           if (!f) return;
           const raw = (f.properties as { AQ_NAME?: string } | null)?.AQ_NAME ?? "Aquifer";
           const label = AQUIFER_LABELS[raw] ?? raw;
           const color = AQUIFER_COLORS[raw] ?? "#9a8a6e";
+          const fact = AQUIFER_FACTS[raw];
+          const factBody = fact
+            ? `<div style="margin-top:6px;border-top:1px solid #c8d6da;padding-top:6px">
+                <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78">Extent</div>
+                <div style="font-family:'Newsreader',serif;font-size:12.5px;color:#07171f;line-height:1.25;margin-top:1px">${escape(fact.extent)}</div>
+                <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78;margin-top:6px">Status</div>
+                <div style="font-family:'Newsreader',serif;font-size:12.5px;color:${color};font-weight:500;line-height:1.25;margin-top:1px">${escape(fact.status)}</div>
+                <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12px;color:#4a6c78;line-height:1.4;margin-top:6px">${escape(fact.story)}</div>
+              </div>`
+            : "";
           popup
             .setLngLat(e.lngLat)
             .setHTML(
-              `<div style="padding:5px 9px;display:flex;align-items:center;gap:6px">
-                <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
-                <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#07171f">${label} aquifer</span>
+              `<div style="padding:8px 11px;max-width:260px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:10px;height:10px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Aquifer</span>
+                </div>
+                <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escape(label)}</div>
+                ${factBody}
               </div>`,
             )
             .addTo(map);
@@ -1461,9 +1944,8 @@ export function TexasMap({
               <span className={dark ? "text-spring/80" : "text-ink/85"}>high · 500+</span>
             </div>
           </div>
-          {/* Pin key — kept intentionally short. The two pin colors
-              encode the address's default mode (personal/transparency)
-              but a first-time viewer doesn't need that nuance. */}
+          {/* Pin key — every shape here matches the actual glyph rendered
+              on the map. Click any pin to investigate the location. */}
           <div>
             <div className={cn(
               "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
@@ -1471,22 +1953,58 @@ export function TexasMap({
             )}>
               Pins · click to investigate
             </div>
-            <ul className="space-y-0.5 text-[10.5px] leading-snug">
+            <ul className="space-y-1 text-[10.5px] leading-snug">
               <li className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-0.5">
-                  <Pin fill="#0d3b6f" ring="#9ec5cf" />
-                  <Pin fill="#b58a52" ring="#7a5a2c" />
-                </span>
+                <span
+                  aria-hidden
+                  className="inline-flex items-center"
+                  style={{ width: 22, height: 14 }}
+                  dangerouslySetInnerHTML={{ __html: teardropPinHtml("#0d3b6f", "#9ec5cf") }}
+                />
                 <span className={dark ? "text-spring/85" : "text-ink/90"}>Sample address</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <span
-                  className="inline-block w-2.5 h-2.5 rounded-full border-2"
-                  style={{ background: "#4a8aa8", borderColor: dark ? "#0a0e16" : "#d6e4e6" }}
+                  aria-hidden
+                  className="inline-flex items-center"
+                  style={{ width: 22, height: 14 }}
+                  dangerouslySetInnerHTML={{ __html: lakeGlyphHtml("#0d3b6f", "#061f3d") }}
                 />
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>Major reservoir (18)</span>
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>Reservoir · live data</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="relative inline-block"
+                  style={{ width: 12, height: 12 }}
+                >
+                  <span
+                    className="absolute inset-0 rounded-full border-[1.6px]"
+                    style={{
+                      background: dark ? "#0a0e16" : "#eef2f3",
+                      borderColor: "#4a8aa8",
+                    }}
+                  />
+                  <span
+                    className="absolute rounded-full"
+                    style={{
+                      width: 4,
+                      height: 4,
+                      background: "#4a8aa8",
+                      top: 4,
+                      left: 4,
+                    }}
+                  />
+                </span>
+                <span className={dark ? "text-spring/85" : "text-ink/90"}>USGS gauge · cfs</span>
               </li>
             </ul>
+            <div className={cn(
+              "mt-1.5 font-serif italic text-[10px] leading-tight",
+              dark ? "text-spring/60" : "text-tideline",
+            )}>
+              Reservoir color = drought severity (full ↔ critical).
+            </div>
           </div>
         </div>
       </div>

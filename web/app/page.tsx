@@ -27,16 +27,14 @@ import { InvestigateButton, ModeToggle } from "@/components/dryline/investigate-
 import { ReasoningTrace } from "@/components/dryline/reasoning-trace";
 import { SynthesisCard } from "@/components/dryline/synthesis-card";
 import { ActionsTab, ActionCard } from "@/components/dryline/actions-tab";
-import { DrylineLogo } from "@/components/dryline/dryline-logo";
+import { DrylineLogo, type LogoVariant } from "@/components/dryline/dryline-logo";
 import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
-import { CompareToggle } from "@/components/dryline/compare-toggle";
 import { ComparisonHero } from "@/components/dryline/comparison-hero";
 import { AboutModal } from "@/components/dryline/about-modal";
-import { AgenticToggle } from "@/components/dryline/agentic-toggle";
 import { TraceSkeleton } from "@/components/dryline/trace-skeleton";
-import { DarkModeProvider, DarkModeToggle } from "@/components/dryline/dark-mode-toggle";
-import { HeaderHelp } from "@/components/dryline/header-help";
+import { DarkModeProvider } from "@/components/dryline/dark-mode-toggle";
+import { ViewMenu } from "@/components/dryline/view-menu";
 import type { DemoLocationWithCoords, Mode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +60,17 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
     primary.status === "streaming" || secondary.status === "streaming";
   const [globalMode, setGlobalMode] = React.useState<Mode>("personal");
   const [aboutOpen, setAboutOpen] = React.useState(false);
+  // Logo picker — temporary. Read ?logo= from the URL once on mount so we
+  // can A/B in the live header without rebuilding. Delete once a variant
+  // is chosen and hard-coded.
+  const [logoVariant, setLogoVariant] = React.useState<LogoVariant>("scallop");
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = new URLSearchParams(window.location.search).get("logo");
+    if (v === "scallop" || v === "aquifer" || v === "confluence" || v === "radial" || v === "current") {
+      setLogoVariant(v);
+    }
+  }, []);
 
   const handlePick = React.useCallback(
     (loc: DemoLocationWithCoords) => startNextAvailable(loc, loc.mode ?? globalMode),
@@ -73,37 +82,29 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
   return (
     <main className="h-screen flex flex-col overflow-hidden bg-background">
       <header className="shrink-0 relative z-40 border-b border-rule bg-background/90 backdrop-blur-sm" style={{ isolation: "isolate" }}>
-        <div className="px-5 py-2.5 flex items-center justify-between gap-4">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <Link href="/" className="flex items-center gap-2 no-underline">
-              <DrylineLogo size={20} />
-              <span className="font-serif text-[20px] font-semibold tracking-[-0.012em] text-ink">
-                Dryline
-              </span>
-            </Link>
-            <span className="hidden lg:flex items-baseline gap-2 min-w-0">
-              <span className="font-serif italic text-[13px] text-tideline truncate">
-                Address-based water-supply intelligence for Texas.
-              </span>
-              <span
-                className="hidden xl:inline font-mono text-[9.5px] tracking-[0.18em] uppercase text-aquifer/70"
-                title="First Street and EJScreen score flood, fire, and pollution at any address — but stop where water supply begins. Dryline starts there."
-              >
-                · supply, not just risk
-              </span>
+        <div className="px-4 py-2.5 flex items-center gap-3 min-w-0">
+          {/* Brand block — collapses tagline first as width shrinks. */}
+          <Link href="/" className="flex items-center gap-2 no-underline shrink-0" aria-label="Dryline — home">
+            <DrylineLogo size={22} variant={logoVariant} />
+            <span className="font-serif text-[20px] font-semibold tracking-[-0.012em] text-ink">
+              Dryline
             </span>
-          </div>
-          <div className="flex items-center gap-2">
+          </Link>
+          <span className="hidden xl:inline font-serif italic text-[13px] text-tideline truncate min-w-0 max-w-[260px]">
+            Investigate Texas water at any address.
+          </span>
+          {/* Search takes the available middle space; everything else is shrink-0. */}
+          <div className="flex-1 min-w-0 flex justify-center px-2">
             <SearchBar
               staged={locations}
               onPick={handlePick}
               activeLabel={primary.location?.label ?? null}
+              className="w-full max-w-[420px]"
             />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
             <ModeToggle value={globalMode} onChange={setGlobalMode} />
-            <CompareToggle />
-            <AgenticToggle />
-            <DarkModeToggle />
-            <HeaderHelp />
+            <ViewMenu />
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
@@ -116,10 +117,13 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
               href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors"
+              className="inline-flex items-center justify-center w-7 h-7 border border-rule text-tideline hover:text-ink hover:border-ink/40 transition-colors"
               title="View source on GitHub"
+              aria-label="View source on GitHub"
             >
-              GitHub ↗
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+              </svg>
             </a>
           </div>
         </div>

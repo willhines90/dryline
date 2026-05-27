@@ -45,6 +45,55 @@ function severityColor(severity: Caveat["severity"]): string {
   return "text-tideline border-rule bg-paper-deep";
 }
 
+/**
+ * Plain-language label for each caveat category. The structured tag
+ * (`freshness`, `bounds`, etc.) is useful in code but baffling on
+ * screen — show a human phrase instead.
+ */
+function categoryLabel(c: Caveat["category"]): string {
+  switch (c) {
+    case "freshness":
+      return "How fresh";
+    case "quality":
+      return "Data quality";
+    case "bounds":
+      return "Coverage limit";
+    case "inference":
+      return "What this does NOT say";
+    case "other":
+    case undefined:
+    default:
+      return "Note";
+  }
+}
+
+/**
+ * One-line tooltip describing a category so a curious user can still
+ * see the underlying taxonomy.
+ */
+function categoryHint(c: Caveat["category"]): string {
+  switch (c) {
+    case "freshness":
+      return "When the data was last refreshed by its source.";
+    case "quality":
+      return "Known data-quality limitations of this source.";
+    case "bounds":
+      return "What this dataset does or doesn't cover.";
+    case "inference":
+      return "An interpretation rule: e.g. correlation ≠ causation, permitted ≠ polluting.";
+    case "other":
+    case undefined:
+    default:
+      return "Additional context from the data source.";
+  }
+}
+
+function severityDot(severity: Caveat["severity"]): string {
+  if (severity === "error") return "bg-rust";
+  if (severity === "warning") return "bg-ochre-deep";
+  return "bg-tideline";
+}
+
 function CitationChip({ index, source }: { index: number; source: Source }) {
   return (
     <a
@@ -72,21 +121,33 @@ function ResultBlock({ result }: { result: ToolResultEvent }) {
         </div>
       ) : null}
       {result.caveats.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
+        <ul className="space-y-1.5">
           {result.caveats.map((c, i) => (
-            <span
+            <li
               key={i}
               className={cn(
-                "border px-1.5 py-px font-mono text-[9px] tracking-[0.14em] uppercase",
+                "border px-2 py-1.5 flex gap-2 items-start",
                 severityColor(c.severity),
               )}
-              title={c.message}
             >
-              {c.severity}
-              {c.category ? ` · ${c.category}` : ""}
-            </span>
+              <span
+                aria-hidden
+                className={cn("inline-block w-1.5 h-1.5 rounded-full mt-1.5 shrink-0", severityDot(c.severity))}
+              />
+              <span className="min-w-0 flex-1">
+                <span
+                  className="block font-mono text-[9.5px] tracking-[0.14em] uppercase"
+                  title={categoryHint(c.category)}
+                >
+                  {categoryLabel(c.category)}
+                </span>
+                <span className="block font-serif text-[12.5px] text-ink/90 leading-snug mt-0.5">
+                  {c.message}
+                </span>
+              </span>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : null}
     </div>
   );

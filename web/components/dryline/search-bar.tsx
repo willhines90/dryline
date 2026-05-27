@@ -38,7 +38,7 @@ const KNOWN_ADDRESSES: KnownAddress[] = [
 ];
 
 interface Candidate {
-  kind: "staged" | "known";
+  kind: "staged" | "known" | "live";
   id: string;
   label: string;
   sub: string;
@@ -49,6 +49,16 @@ interface Candidate {
   approxLatLng: { lat: number; lng: number };
   mode: Mode;
   headlineStory?: string;
+}
+
+interface LiveSuggestion {
+  label: string;
+  city: string;
+  county: string;
+  region: string;
+  lat: number;
+  lng: number;
+  placeId: string;
 }
 
 interface SearchBarProps {
@@ -62,8 +72,46 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
   const [hl, setHl] = React.useState(0);
+  const [liveHits, setLiveHits] = React.useState<LiveSuggestion[]>([]);
+  const [liveLoading, setLiveLoading] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const wrapRef = React.useRef<HTMLDivElement | null>(null);
+  const liveAbortRef = React.useRef<AbortController | null>(null);
+
+  // Debounced Nominatim autocomplete. Fires only for queries ≥ 3 chars,
+  // 300ms after the last keystroke. Aborts any in-flight request so the
+  // dropdown reflects the latest query, not whichever request returns last.
+  React.useEffect(() => {
+    const text = q.trim();
+    if (text.length < 3) {
+      setLiveHits([]);
+      setLiveLoading(false);
+      return;
+    }
+    setLiveLoading(true);
+    const t = setTimeout(async () => {
+      liveAbortRef.current?.abort();
+      const ac = new AbortController();
+      liveAbortRef.current = ac;
+      try {
+        const res = await fetch(`/api/search/suggest?q=${encodeURIComponent(text)}`, {
+          signal: ac.signal,
+        });
+        if (!res.ok) {
+          setLiveHits([]);
+          return;
+        }
+        const data = (await res.json()) as { suggestions?: LiveSuggestion[] };
+        setLiveHits(data.suggestions ?? []);
+      } catch (err) {
+        if ((err as { name?: string }).name === "AbortError") return;
+        setLiveHits([]);
+      } finally {
+        setLiveLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -110,18 +158,33 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
       approxLatLng: a.approxLatLng,
       mode: "personal",
     }));
-    const all = [...stagedMapped, ...knownMapped];
-    if (!q.trim()) return all.slice(0, 8);
-    const needle = q.toLowerCase();
-    return all
-      .filter((c) =>
-        c.label.toLowerCase().includes(needle) ||
-        c.sub.toLowerCase().includes(needle) ||
-        c.city.toLowerCase().includes(needle) ||
-        c.county.toLowerCase().includes(needle),
-      )
-      .slice(0, 10);
-  }, [q, staged]);
+    const liveMapped: Candidate[] = liveHits.map((h) => ({
+      kind: "live",
+      id: `live:${h.placeId}`,
+      label: h.label,
+      sub: h.region,
+      region: h.region,
+      city: h.city,
+      county: h.county,
+      approxLatLng: { lat: h.lat, lng: h.lng },
+      mode: "personal",
+    }));
+    const needle = q.trim().toLowerCase();
+    if (!needle) return [...stagedMapped, ...knownMapped].slice(0, 8);
+    // When the user is typing, prioritize:
+    //   1. local fuzzy matches against staged/known (instant, no network)
+    //   2. live Nominatim hits (real Texas addresses)
+    // Dedup live hits that already appear in the local list by label.
+    const localMatches = [...stagedMapped, ...knownMapped].filter((c) =>
+      c.label.toLowerCase().includes(needle) ||
+      c.sub.toLowerCase().includes(needle) ||
+      c.city.toLowerCase().includes(needle) ||
+      c.county.toLowerCase().includes(needle),
+    );
+    const localLabels = new Set(localMatches.map((c) => c.label.toLowerCase()));
+    const liveDedup = liveMapped.filter((c) => !localLabels.has(c.label.toLowerCase()));
+    return [...localMatches, ...liveDedup].slice(0, 10);
+  }, [q, staged, liveHits]);
 
   React.useEffect(() => setHl(0), [q]);
 
@@ -219,7 +282,7 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
   const display = open ? q : activeLabel ?? q;
 
   return (
-    <div ref={wrapRef} className={cn("relative w-[360px] max-w-full", className)}>
+    <div ref={wrapRef} className={cn("relative w-full max-w-[360px]", className)}>
       <div
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 bg-card transition-colors",
@@ -278,48 +341,59 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
 
       {open && candidates.length > 0 ? (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-[100] max-h-[380px] overflow-y-auto">
-          <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
-            {q.trim()
-              ? `${candidates.length} MATCH${candidates.length === 1 ? "" : "ES"}`
-              : "SAMPLES · TEXAS CITIES"}
+          <div className="flex items-center justify-between px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
+            <span>
+              {q.trim()
+                ? `${candidates.length} MATCH${candidates.length === 1 ? "" : "ES"}`
+                : "SAMPLES · TEXAS CITIES"}
+            </span>
+            {liveLoading ? <span className="text-aquifer">SEARCHING TX ADDRESSES…</span> : null}
           </div>
-          {candidates.map((c, i) => (
-            <button
-              key={c.id}
-              type="button"
-              onMouseEnter={() => setHl(i)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                commit(c);
-              }}
-              className={cn(
-                "block w-full text-left px-3 py-2.5 border-b border-rule cursor-pointer text-ink",
-                hl === i ? "bg-paper-deep" : "bg-transparent",
-              )}
-            >
-              <div className="flex justify-between items-baseline gap-2">
-                <span className="font-serif text-[14.5px] font-medium leading-tight">
-                  {c.label}
-                </span>
-                <span
-                  title={
-                    c.kind === "staged"
-                      ? "Sample Texas address with a curated story walkthrough."
-                      : "Texas city — runs a fresh investigation against live public APIs."
-                  }
-                  className={cn(
-                    "shrink-0 font-mono text-[8.5px] tracking-[0.16em] px-1.5 py-px border",
-                    c.kind === "staged"
-                      ? "text-aquifer border-aquifer/60"
-                      : "text-tideline border-rule",
-                  )}
-                >
-                  {c.kind === "staged" ? "SAMPLE" : "TX CITY"}
-                </span>
-              </div>
-              <div className="text-[11.5px] text-tideline mt-0.5">{c.sub}</div>
-            </button>
-          ))}
+          {candidates.map((c, i) => {
+            const chipLabel =
+              c.kind === "staged" ? "SAMPLE" : c.kind === "live" ? "TX MATCH" : "TX CITY";
+            const chipTitle =
+              c.kind === "staged"
+                ? "Sample Texas address with a curated story walkthrough."
+                : c.kind === "live"
+                ? "Live Texas address from OpenStreetMap — runs a fresh investigation against public APIs."
+                : "Texas city — runs a fresh investigation against live public APIs.";
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onMouseEnter={() => setHl(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commit(c);
+                }}
+                className={cn(
+                  "block w-full text-left px-3 py-2.5 border-b border-rule cursor-pointer text-ink",
+                  hl === i ? "bg-paper-deep" : "bg-transparent",
+                )}
+              >
+                <div className="flex justify-between items-baseline gap-2">
+                  <span className="font-serif text-[14.5px] font-medium leading-tight">
+                    {c.label}
+                  </span>
+                  <span
+                    title={chipTitle}
+                    className={cn(
+                      "shrink-0 font-mono text-[8.5px] tracking-[0.16em] px-1.5 py-px border",
+                      c.kind === "staged"
+                        ? "text-aquifer border-aquifer/60"
+                        : c.kind === "live"
+                        ? "text-ink border-ink/60 bg-paper-deep"
+                        : "text-tideline border-rule",
+                    )}
+                  >
+                    {chipLabel}
+                  </span>
+                </div>
+                <div className="text-[11.5px] text-tideline mt-0.5">{c.sub}</div>
+              </button>
+            );
+          })}
           <div className="flex justify-between px-3 py-2 font-mono text-[9.5px] tracking-[0.16em] text-tideline">
             <span>↑↓ NAVIGATE  ↵ SELECT  ESC CLOSE</span>
           </div>

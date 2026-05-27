@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export type LayerKey = "drought" | "reservoirs" | "rivers" | "aquifers" | "gauges";
+export type LayerKey = "samples" | "drought" | "reservoirs" | "rivers" | "aquifers" | "gauges";
 
 export interface LayerSpec {
   key: LayerKey;

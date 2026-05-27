@@ -2837,7 +2837,7 @@ function MapLegend({ dark }: { dark: boolean }) {
               "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1.5",
               dark ? "text-spring/70" : "text-tideline",
             )}>
-              What's on the map
+              What&rsquo;s on the map
             </div>
             <ul className="space-y-1.5 text-[11px] leading-snug">
               <li className="flex items-start gap-2">

@@ -91,8 +91,11 @@ async function fetchAndClip(): Promise<UsdmFC> {
     return memoryCache.payload;
   }
   const [res, txFeature] = await Promise.all([
+    // The upstream JSON is ~17 MB, well over Next.js's 2 MB fetch-cache
+    // limit. We rely on the in-process `memoryCache` above for the
+    // 24-hr TTL and skip Next's cache so the build doesn't warn.
     fetch("https://droughtmonitor.unl.edu/data/json/usdm_current.json", {
-      next: { revalidate: 86400 },
+      cache: "no-store",
     }),
     getTxClipFeature(),
   ]);

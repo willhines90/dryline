@@ -17,6 +17,8 @@
  */
 
 import type { NextRequest } from "next/server";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 export const runtime = "nodejs";
 export const revalidate = 3600; // 1 hr
@@ -253,38 +255,81 @@ async function buildPayload(): Promise<CachePayload> {
   };
 }
 
-export async function GET(_req: NextRequest): Promise<Response> {
+// On serverless cold-start the in-process memoryCache is empty and
+// buildPayload() can take 60-90 s while it fans out 37 TWDB CSV
+// fetches. We ship a pre-baked snapshot at `public/tx-reservoirs.json`
+// (refreshed manually or via a build script) and serve it instantly on
+// the cold path, kicking off the live rebuild in the background so the
+// next request gets fresh data.
+async function loadStaticSnapshot(): Promise<CachePayload | null> {
   try {
-    // Don't trust a cached payload whose entries are all-null — a flaky
-    // TWDB fetch can poison the cache for an hour otherwise. Re-fetch if
-    // the cache looks empty.
-    const cacheIsHealthy =
-      memoryCache &&
-      memoryCache.payload.reservoirs.some((r) => r.pctFull != null);
-    if (!cacheIsHealthy || Date.now() - (memoryCache?.at ?? 0) > MEMORY_TTL_MS) {
-      const payload = await buildPayload();
-      // Only cache if the fetch actually returned data; otherwise leave
-      // the old (possibly stale-but-non-empty) cache in place.
+    const fp = path.resolve(process.cwd(), "public", "tx-reservoirs.json");
+    const raw = await fs.readFile(fp, "utf-8");
+    const parsed = JSON.parse(raw) as CachePayload;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+let backgroundRefresh: Promise<void> | null = null;
+function kickBackgroundRefresh() {
+  if (backgroundRefresh) return;
+  backgroundRefresh = buildPayload()
+    .then((payload) => {
       if (payload.reservoirs.some((r) => r.pctFull != null)) {
         memoryCache = { at: Date.now(), payload };
-      } else if (memoryCache) {
-        // Keep the previous cache; the new payload is unusable.
-      } else {
-        // No prior cache and the fetch returned all-null — surface as 502
-        // so the client can render the "live data not in feed" fallback
-        // instead of pretending the data was simply missing.
-        return new Response(JSON.stringify({ error: "TWDB returned empty payload" }), {
-          status: 502,
-          headers: { "Content-Type": "application/json" },
-        });
       }
-    }
-    return new Response(JSON.stringify(memoryCache!.payload), {
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=900, s-maxage=3600, stale-while-revalidate=7200",
-      },
+    })
+    .catch(() => {
+      /* keep the static snapshot path alive */
+    })
+    .finally(() => {
+      backgroundRefresh = null;
     });
+}
+
+export async function GET(_req: NextRequest): Promise<Response> {
+  try {
+    // Fast path 1: in-memory cache is healthy and fresh.
+    const cacheIsHealthy =
+      memoryCache &&
+      memoryCache.payload.reservoirs.some((r) => r.pctFull != null) &&
+      Date.now() - memoryCache.at < MEMORY_TTL_MS;
+    if (cacheIsHealthy) {
+      return Response.json(memoryCache!.payload, {
+        headers: {
+          "Cache-Control": "public, max-age=900, s-maxage=3600, stale-while-revalidate=7200",
+        },
+      });
+    }
+
+    // Fast path 2: serve the pre-baked static snapshot instantly and
+    // refresh in the background. This is what makes cold-start ~50 ms
+    // instead of ~90 s.
+    const snapshot = await loadStaticSnapshot();
+    if (snapshot && snapshot.reservoirs.some((r) => r.pctFull != null)) {
+      kickBackgroundRefresh();
+      return Response.json(snapshot, {
+        headers: {
+          "Cache-Control": "public, max-age=900, s-maxage=3600, stale-while-revalidate=7200",
+          "X-Dryline-Source": "snapshot",
+        },
+      });
+    }
+
+    // Slow path: no snapshot and no cache. Wait for the live fetch.
+    const payload = await buildPayload();
+    if (payload.reservoirs.some((r) => r.pctFull != null)) {
+      memoryCache = { at: Date.now(), payload };
+      return Response.json(payload);
+    }
+    if (memoryCache) {
+      return Response.json(memoryCache.payload);
+    }
+    return Response.json(
+      { error: "TWDB returned empty payload" },
+      { status: 502 },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), {

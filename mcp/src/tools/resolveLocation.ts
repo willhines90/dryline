@@ -117,7 +117,13 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
       nominatimUrl.searchParams.set("countrycodes", "us");
       nominatimUrl.searchParams.set("limit", "1");
 
-      const geoRes = await fetch(nominatimUrl, { headers: { "User-Agent": ua } });
+      // Defensive 8s timeout — Nominatim's free tier occasionally hangs
+      // for 30+s under load, which can drag a whole investigation to the
+      // edge of the function timeout. Fail fast instead.
+      const geoRes = await fetch(nominatimUrl, {
+        headers: { "User-Agent": ua },
+        signal: AbortSignal.timeout(8000),
+      });
       if (!geoRes.ok) throw new Error(`Nominatim ${geoRes.status}`);
       sources.push(
         source({ title: "Nominatim — geocoding", url: nominatimUrl.toString(), publisher: "OpenStreetMap" }),

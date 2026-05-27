@@ -48,6 +48,12 @@ import { computeDrylineScore } from "@/lib/dryline-score";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Vercel's default function timeout is 10s (Hobby) / 60s (Pro). The
+// deterministic fan-out runs ~8 tools in parallel and then synthesizes
+// via Gemini; observed prod wall-time hits 70-90s when Nominatim is
+// throttling or EPA ECHO is slow. Bump the ceiling to 120s so the
+// stream actually completes instead of being chopped mid-synthesis.
+export const maxDuration = 120;
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 const CACHE_TTL_MS = 5 * 60 * 1000;

@@ -16,14 +16,28 @@ export type LayerKey =
   | "basins"
   | "gcds";
 
+export type LayerGroup = "hydrology" | "climate" | "reference";
+
 export interface LayerSpec {
   key: LayerKey;
   label: string;
   swatch: string;
+  /** Section header the toggle appears under. */
+  group: LayerGroup;
   /** When true, the toggle is rendered but disabled (data not available). */
   disabled?: boolean;
+  /** Initial on/off state on first mount (before any localStorage override).
+   *  Defaults to `true` unless explicitly set to `false`. Independent from
+   *  `disabled` — a disabled layer can still be marked default-off. */
+  defaultOn?: boolean;
   hint?: string;
 }
+
+const GROUP_LABELS: Record<LayerGroup, string> = {
+  hydrology: "Hydrology",
+  climate: "Climate & weather",
+  reference: "Reference",
+};
 
 const LS_KEY = "dryline.layer-toggles.v1";
 
@@ -33,10 +47,14 @@ export function useLayerToggles(specs: LayerSpec[]): {
 } {
   const base = React.useMemo(
     () =>
-      Object.fromEntries(specs.map((s) => [s.key, !s.disabled])) as Record<
-        LayerKey,
-        boolean
-      >,
+      Object.fromEntries(
+        specs.map((s) => {
+          // Disabled layers are forced off; otherwise honor defaultOn
+          // (treating undefined as `true` for backwards compat).
+          if (s.disabled) return [s.key, false];
+          return [s.key, s.defaultOn !== false];
+        }),
+      ) as Record<LayerKey, boolean>,
     [specs],
   );
 
@@ -79,6 +97,14 @@ interface LayerControlProps {
 
 export function LayerControl({ specs, state, onToggle, className, dark }: LayerControlProps) {
   const [open, setOpen] = React.useState(true);
+  // Preserve the order specs are declared in within each group.
+  const byGroup = React.useMemo(() => {
+    const groups: LayerGroup[] = ["hydrology", "climate", "reference"];
+    return groups
+      .map((g) => ({ key: g, label: GROUP_LABELS[g], specs: specs.filter((s) => s.group === g) }))
+      .filter((g) => g.specs.length > 0);
+  }, [specs]);
+
   return (
     <div
       className={cn(
@@ -102,13 +128,30 @@ export function LayerControl({ specs, state, onToggle, className, dark }: LayerC
         <span aria-hidden>{open ? "−" : "+"}</span>
       </button>
       {open ? (
-        <ul className={cn("border-t", dark ? "border-aquifer/40" : "border-rule")}>
-          {specs.map((s) => (
+        <div className={cn("border-t", dark ? "border-aquifer/40" : "border-rule")}>
+          {byGroup.map((g, gi) => (
+            <div
+              key={g.key}
+              className={cn(
+                gi > 0 && "border-t",
+                dark ? "border-aquifer/40" : "border-rule",
+              )}
+            >
+              <div
+                className={cn(
+                  "px-3 pt-1.5 pb-0.5 font-mono text-[8.5px] tracking-[0.18em] uppercase",
+                  dark ? "text-spring/60" : "text-tideline/80",
+                )}
+              >
+                {g.label}
+              </div>
+              <ul>
+                {g.specs.map((s) => (
             <li
               key={s.key}
               className={cn(
-                "border-b last:border-b-0",
-                dark ? "border-aquifer/30" : "border-rule",
+                "border-t",
+                dark ? "border-aquifer/30" : "border-rule/70",
               )}
             >
               <button
@@ -156,8 +199,11 @@ export function LayerControl({ specs, state, onToggle, className, dark }: LayerC
                 </span>
               </button>
             </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       ) : null}
     </div>
   );

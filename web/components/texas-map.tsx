@@ -298,18 +298,33 @@ function modeMarker(mode: Mode | undefined, isLive: boolean | undefined): {
 const DROUGHT_COLORS = ["#cdd9b4", "#cfb27a", "#a85a35", "#6f1d10", "#4a0d05"];
 // DM 0=D0(abnormal), 1=D1(moderate), 2=D2(severe), 3=D3(extreme), 4=D4(exceptional)
 
+/**
+ * Map layer specs, grouped + ordered for the LayerControl panel.
+ *
+ * Order within each group = display order. Group order is:
+ *   Hydrology  → "what water is here" (surface + groundwater)
+ *   Climate    → "what's happening with the atmosphere"
+ *   Reference  → orientation overlays (sample addresses, regions)
+ *
+ * `defaultOn` controls first-load visibility (localStorage overrides
+ * on subsequent visits). Situational layers (dryline, radar, alerts)
+ * default off so the first impression is calm.
+ */
 const LAYER_SPECS: LayerSpec[] = [
-  { key: "samples", label: "Sample addresses", swatch: "#0d3b6f", hint: "Seven sample Texas addresses spanning Hill Country, the I-35 corridor, Trans-Pecos, the Coast, the Panhandle, Far West Texas, and the Edwards recharge zone." },
-  { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
-  { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
-  { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs with live % full + 7-day trend." },
-  { key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
-  { key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
-  { key: "basins", label: "River basins", swatch: "#2a5e6a", hint: "TWDB-designated TX river basins (Brazos, Trinity, Nueces, Colorado, Red, Rio Grande, etc.) — your address sits in exactly one.", disabled: true },
-  { key: "gcds", label: "Groundwater districts", swatch: "#8a6e4a", hint: "Texas Groundwater Conservation Districts (~100) — the actual regulatory authority over your well.", disabled: true },
-  { key: "dryline", label: "Dryline corridor", swatch: "#b58a52", hint: "Climatological band across West Texas where the meteorological dryline (dry continental air meets moist Gulf air) most often sets up." },
-  { key: "radar", label: "Precipitation radar", swatch: "#5fc7ff", hint: "Live NEXRAD reflectivity mosaic from NOAA / Iowa State Mesonet. Updates every ~5 min." },
-  { key: "alerts", label: "Active weather alerts", swatch: "#b13a1f", hint: "NWS active alerts in Texas (tornado watches, severe storm warnings, flash flood warnings). Updates every 5 min." },
+  // ---- Hydrology ----
+  { group: "hydrology", key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs with live % full + 7-day trend." },
+  { group: "hydrology", key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
+  { group: "hydrology", key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
+  { group: "hydrology", key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
+  { group: "hydrology", key: "basins", label: "River basins", swatch: "#2a5e6a", hint: "TWDB-designated TX river basins (Brazos, Trinity, Nueces, Colorado, Red, Rio Grande, etc.) — your address sits in exactly one.", disabled: true },
+  // ---- Climate ----
+  { group: "climate", key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
+  { group: "climate", key: "dryline", label: "Dryline corridor", swatch: "#b58a52", hint: "Climatological band across West Texas where the meteorological dryline (dry continental air meets moist Gulf air) most often sets up.", defaultOn: false },
+  { group: "climate", key: "radar", label: "Precipitation radar", swatch: "#5fc7ff", hint: "Live NEXRAD reflectivity mosaic from NOAA / Iowa State Mesonet. Updates every ~5 min.", defaultOn: false },
+  { group: "climate", key: "alerts", label: "Active weather alerts", swatch: "#b13a1f", hint: "NWS active alerts in Texas (tornado watches, severe storm warnings, flash flood warnings). Updates every 5 min.", defaultOn: false },
+  // ---- Reference ----
+  { group: "reference", key: "samples", label: "Sample addresses", swatch: "#0d3b6f", hint: "Seven sample Texas addresses spanning Hill Country, the I-35 corridor, Trans-Pecos, the Coast, the Panhandle, Far West Texas, and the Edwards recharge zone." },
+  { group: "reference", key: "gcds", label: "Groundwater districts", swatch: "#8a6e4a", hint: "Texas Groundwater Conservation Districts (~100) — the actual regulatory authority over your well.", disabled: true },
 ];
 
 // Per-aquifer fill colors. Earth-tone family so they sit below all

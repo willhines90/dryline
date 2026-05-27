@@ -129,21 +129,9 @@ function reservoirFill(pct: number | null, hist: number | null): {
  * crisp on retina displays.
  */
 /**
- * Make a hover popup clickable. Layer hover handlers normally close the
- * popup the instant the cursor leaves the layer feature, which means
- * the user can never move their cursor INTO the popup to click a link
- * or copy text. This helper wires three things:
- *
- *  - `scheduleClose()` — delays the actual remove() by ~280 ms so the
- *    cursor has time to cross the gap from feature to popup.
- *  - `cancelClose()` — call this from the feature's mousemove so each
- *    new event clears any pending close.
- *  - `bindToElement()` — call after the popup is added to the map so
- *    mouseenter on the popup itself cancels the timer, and mouseleave
- *    on the popup closes immediately.
- *
- * Returns the controller; the caller wires it into the layer's
- * `mousemove` / `mouseleave` handlers.
+ * Legacy hover-persist helper kept temporarily for callsites that
+ * haven't been migrated to `setupLayerPopup` yet. Will be deleted
+ * once all layers use the new model.
  */
 function bindPopupHoverPersist(
   popup: import("maplibre-gl").Popup,
@@ -151,15 +139,10 @@ function bindPopupHoverPersist(
 ): { cancelClose: () => void; scheduleClose: () => void; bindToElement: () => void } {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let bound = false;
-  const cancelClose = () => {
-    if (timer) { clearTimeout(timer); timer = null; }
-  };
+  const cancelClose = () => { if (timer) { clearTimeout(timer); timer = null; } };
   const scheduleClose = () => {
     cancelClose();
-    timer = setTimeout(() => {
-      popup.remove();
-      timer = null;
-    }, closeDelayMs);
+    timer = setTimeout(() => { popup.remove(); timer = null; }, closeDelayMs);
   };
   const bindToElement = () => {
     if (bound) return;
@@ -170,6 +153,148 @@ function bindPopupHoverPersist(
     bound = true;
   };
   return { cancelClose, scheduleClose, bindToElement };
+}
+
+/**
+ * Map-layer interaction model:
+ *
+ *   HOVER → transient preview popup (closes on mouseleave).
+ *   CLICK → pinned popup with × close button and clickable links /
+ *           action buttons. Hover preview is suppressed while pinned.
+ *   X      → un-pins. Clicking a different feature replaces the pin.
+ *
+ * Each layer provides `previewHtml(props)` (short, no buttons) and
+ * `pinnedHtml(props)` (richer, with links). Investigatable layers
+ * additionally pass `onInvestigate`; the helper wires a button with
+ * `data-dryline-investigate` inside `pinnedHtml` to that callback and
+ * closes the pin once fired.
+ *
+ * `bindPopupHoverPersist` (the old grace-period hover helper) is gone
+ * — the new model replaces it everywhere.
+ */
+interface LayerPopupOptions {
+  layerId: string;
+  /** "mousemove" for polygons/lines (popup follows cursor),
+   *  "mouseenter" for point features (popup pins to feature center). */
+  hoverEvent: "mousemove" | "mouseenter";
+  previewHtml: (feature: import("maplibre-gl").MapGeoJSONFeature) => string;
+  pinnedHtml: (feature: import("maplibre-gl").MapGeoJSONFeature) => string;
+  onInvestigate?: (
+    feature: import("maplibre-gl").MapGeoJSONFeature,
+    lngLat: import("maplibre-gl").LngLat,
+  ) => void;
+  className?: string;
+}
+
+interface LayerPopupController {
+  cleanup: () => void;
+  /** Returns true if the pin was active and now dismissed. */
+  unpinIfActive: () => boolean;
+}
+
+function setupLayerPopup(
+  map: MapInstance,
+  ml: typeof import("maplibre-gl"),
+  opts: LayerPopupOptions,
+): LayerPopupController {
+  const previewPopup = new ml.Popup({
+    closeButton: false,
+    closeOnClick: false,
+    offset: 12,
+    className: `dryline-preview-popup ${opts.className ?? ""}`,
+  });
+  const pinnedPopup = new ml.Popup({
+    closeButton: true,
+    closeOnClick: false,
+    offset: 14,
+    maxWidth: "320px",
+    className: `dryline-pinned-popup ${opts.className ?? ""}`,
+  });
+  let isPinned = false;
+  pinnedPopup.on("close", () => {
+    isPinned = false;
+  });
+
+  type Evt = import("maplibre-gl").MapMouseEvent & {
+    features?: import("maplibre-gl").MapGeoJSONFeature[];
+    preventDefault?: () => void;
+  };
+
+  const onHover = (e: Evt) => {
+    if (isPinned) return;
+    const f = e.features?.[0];
+    if (!f) return;
+    map.getCanvas().style.cursor = "pointer";
+    // For point features, anchor the preview to the feature's center;
+    // for polygons/lines, anchor it to the cursor.
+    let lngLat = e.lngLat;
+    const g = f.geometry as { type?: string; coordinates?: unknown };
+    if (
+      opts.hoverEvent === "mouseenter" &&
+      g.type === "Point" &&
+      Array.isArray(g.coordinates) &&
+      g.coordinates.length === 2
+    ) {
+      lngLat = new ml.LngLat(g.coordinates[0] as number, g.coordinates[1] as number);
+    }
+    previewPopup.setLngLat(lngLat).setHTML(opts.previewHtml(f)).addTo(map);
+  };
+  const onLeave = () => {
+    if (isPinned) return;
+    map.getCanvas().style.cursor = "";
+    previewPopup.remove();
+  };
+  const onClick = (e: Evt) => {
+    const f = e.features?.[0];
+    if (!f) return;
+    e.preventDefault?.();
+    previewPopup.remove();
+    let lngLat = e.lngLat;
+    const g = f.geometry as { type?: string; coordinates?: unknown };
+    if (g.type === "Point" && Array.isArray(g.coordinates) && g.coordinates.length === 2) {
+      lngLat = new ml.LngLat(g.coordinates[0] as number, g.coordinates[1] as number);
+    }
+    isPinned = true;
+    pinnedPopup.setLngLat(lngLat).setHTML(opts.pinnedHtml(f)).addTo(map);
+    // Wire the INVESTIGATE button inside the pinned popup (if present).
+    if (opts.onInvestigate) {
+      const el = pinnedPopup.getElement();
+      const btn = el?.querySelector<HTMLElement>("[data-dryline-investigate]");
+      if (btn) {
+        btn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          opts.onInvestigate!(f, lngLat);
+          isPinned = false;
+          pinnedPopup.remove();
+        });
+      }
+    }
+  };
+
+  map.on(opts.hoverEvent, opts.layerId, onHover);
+  map.on("mouseleave", opts.layerId, onLeave);
+  map.on("click", opts.layerId, onClick);
+
+  return {
+    cleanup: () => {
+      try {
+        map.off(opts.hoverEvent, opts.layerId, onHover);
+        map.off("mouseleave", opts.layerId, onLeave);
+        map.off("click", opts.layerId, onClick);
+      } catch {
+        /* idempotent */
+      }
+      previewPopup.remove();
+      pinnedPopup.remove();
+    },
+    unpinIfActive: () => {
+      if (!isPinned) return false;
+      pinnedPopup.remove();
+      isPinned = false;
+      return true;
+    },
+  };
 }
 
 function svgToImage(svgString: string): Promise<HTMLImageElement> {
@@ -777,6 +902,9 @@ export function TexasMap({
           type: "symbol",
           source: SRC,
           layout: {
+            // Respect the user's current toggle on first paint, in case
+            // they turned samples off before the data finished loading.
+            visibility: layerState.samples ? "visible" : "none",
             "icon-image": [
               "match",
               ["get", "iconKey"],
@@ -1332,13 +1460,17 @@ export function TexasMap({
         map.addSource(SRC, { type: "geojson", data: fc });
       }
 
-      // 4. Add the symbol layer (idempotent).
+      // 4. Add the symbol layer (idempotent). Honor the user's current
+      //    visibility toggle: if reservoirs were turned OFF before the
+      //    data fetch finished, the freshly-added layer would otherwise
+      //    appear visible until the next toggle event.
       if (!map.getLayer(LAYER)) {
         map.addLayer({
           id: LAYER,
           type: "symbol",
           source: SRC,
           layout: {
+            visibility: layerState.reservoirs ? "visible" : "none",
             "icon-image": [
               "match",
               ["get", "tier"],

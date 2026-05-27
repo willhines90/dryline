@@ -7,7 +7,8 @@ export type LogoVariant =
   | "scallop"
   | "aquifer"
   | "confluence"
-  | "radial";
+  | "radial"
+  | "front";
 
 interface DrylineLogoProps {
   size?: number;
@@ -34,6 +35,8 @@ interface DrylineLogoProps {
  */
 export function DrylineLogo({ size = 18, className, variant = "current" }: DrylineLogoProps) {
   switch (variant) {
+    case "front":
+      return <FrontMark size={size} className={className} />;
     case "scallop":
       return <ScallopMark size={size} className={className} />;
     case "aquifer":
@@ -46,6 +49,59 @@ export function DrylineLogo({ size = 18, className, variant = "current" }: Dryli
     default:
       return <CurrentMark size={size} className={className} />;
   }
+}
+
+/**
+ * The "front" variant: a capital D whose vertical spine + caps are
+ * drawn cleanly, but whose curved bow is rendered as a meteorological
+ * weather-front glyph — the classic blue cold-front symbol (a line
+ * with triangles pointing in the direction of motion). The shape
+ * reads as a D from a distance and as "weather forecast" up close.
+ *
+ * Designed at viewBox 0 0 32 32 so it scales cleanly at any size.
+ * Stroke widths are tuned for legibility at 22–40 px.
+ */
+function FrontMark({ size, className }: { size: number; className?: string }) {
+  // Bow arc parameters. The bow's apex is at (28, 16); it joins the
+  // top cap at (10, 4) and the bottom cap at (10, 28). The triangles
+  // are pointed OUTWARD from the bow (the cold-front motion direction
+  // in standard NWS notation: triangles point toward the warmer side
+  // the front is advancing into).
+  const stroke = "#0d3b6f"; // aquifer
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      className={className}
+      aria-hidden
+      role="img"
+    >
+      {/* Spine of the D — vertical bar on the left */}
+      <line x1="6" y1="4" x2="6" y2="28" stroke={stroke} strokeWidth="2.6" strokeLinecap="round" />
+      {/* Top + bottom caps connecting spine to bow */}
+      <line x1="6" y1="4" x2="11" y2="4" stroke={stroke} strokeWidth="2.6" strokeLinecap="round" />
+      <line x1="6" y1="28" x2="11" y2="28" stroke={stroke} strokeWidth="2.6" strokeLinecap="round" />
+      {/* The bow itself — a smooth curve from top cap to bottom cap */}
+      <path
+        d="M 11 4 C 22 4, 26.5 9.5, 26.5 16 C 26.5 22.5, 22 28, 11 28"
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Cold-front triangles ON the bow, pointing outward (east). Five
+          triangles spaced along the arc — they ride along the curve
+          like teeth on a saw blade. */}
+      <polygon points="14.5,3 17,0 15.7,4.5" fill={stroke} />
+      <polygon points="21,5.5 25,3.5 22,7.8" fill={stroke} />
+      <polygon points="25.5,10.5 30,10 26.7,13" fill={stroke} />
+      <polygon points="25.5,21.5 30,22 26.7,19" fill={stroke} />
+      <polygon points="21,26.5 25,28.5 22,24.2" fill={stroke} />
+      <polygon points="14.5,29 17,32 15.7,27.5" fill={stroke} />
+    </svg>
+  );
 }
 
 function CurrentMark({ size, className }: { size: number; className?: string }) {

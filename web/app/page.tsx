@@ -90,8 +90,11 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
         <div className="px-4 py-3 flex items-center gap-3 min-w-0">
           {/* Brand block — collapses tagline first as width shrinks. */}
           <Link href="/" className="flex items-center gap-2.5 no-underline shrink-0 group" aria-label="Dryline — home">
-            <DrylineLogo size={24} variant={logoVariant} />
-            <span className="font-serif text-[22px] font-semibold tracking-[-0.012em] text-ink leading-none">
+            <DrylineLogo size={30} variant="front" />
+            <span
+              className="text-[26px] tracking-[-0.018em] text-ink leading-none"
+              style={{ fontFamily: "var(--font-fraunces), 'Newsreader', Georgia, serif", fontWeight: 700, fontVariationSettings: "'opsz' 96" }}
+            >
               Dryline
             </span>
           </Link>
@@ -99,8 +102,8 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             aria-hidden
             className="hidden xl:inline-block h-5 w-px bg-ink/15 shrink-0"
           />
-          <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline truncate min-w-0 max-w-[280px]">
-            Investigate Texas water at any address.
+          <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline truncate min-w-0 max-w-[320px]">
+            Where Texas weather meets Texas water — at any address.
           </span>
           {/* Search takes the available middle space; everything else is shrink-0. */}
           <div className="flex-1 min-w-0 flex justify-center px-2">

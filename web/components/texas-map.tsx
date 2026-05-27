@@ -316,10 +316,7 @@ const LAYER_SPECS: LayerSpec[] = [
   { group: "hydrology", key: "gauges", label: "Stream gauges", swatch: "#2566a8", hint: "USGS NWIS active discharge gauges, ~500 across Texas." },
   { group: "hydrology", key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
   { group: "hydrology", key: "aquifers", label: "Major aquifers", swatch: "#1f4d4a", hint: "TWDB major aquifer outcrop polygons (Ogallala, Edwards, Trinity, Carrizo, Gulf Coast, Edwards-Trinity, Pecos Valley, Seymour, Hueco-Bolson)." },
-  // River basins layer pulled — TWDB ArcGIS open-data endpoints return
-  // 400/403 on documented queries; USGS WBD ArcGIS service returns 500
-  // on every query format. Will re-add once a clean GeoJSON source is
-  // found (or hand-bake simplified polygons). Don't ship a broken toggle.
+  { group: "hydrology", key: "basins", label: "River basins", swatch: "#2a5e6a", hint: "USGS WBD HUC-4 subregions intersecting Texas — Brazos, Trinity, Colorado, Rio Grande, Red, Sabine, Neches, and others.", defaultOn: false },
   // ---- Climate ----
   { group: "climate", key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
   { group: "climate", key: "dryline", label: "Dryline corridor", swatch: "#b58a52", hint: "Climatological band across West Texas where the meteorological dryline (dry continental air meets moist Gulf air) most often sets up.", defaultOn: false },
@@ -2296,6 +2293,142 @@ export function TexasMap({
       cleanup();
     };
   }, [layerState.aquifers, mapReadyState, dark]);
+
+  // ---- 5d-bis. River basins (USGS WBD HUC-4 subregions, static) ----
+  // The basin polygons span past Texas's edges (the Lower Pecos for
+  // example includes part of NM) — the outside-TX mask handles the
+  // visual clip so they read as TX features here.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    let cancelled = false;
+    const SRC = "dryline-basins";
+    const FILL = "dryline-basins-fill";
+    const LINE = "dryline-basins-line";
+    const cleanup = () => {
+      try {
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch { /* idempotent */ }
+    };
+    if (!layerState.basins) {
+      cleanup();
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch("/tx-river-basins.geojson", { cache: "force-cache" });
+        if (cancelled || !res.ok) return;
+        const fc = await res.json();
+        if (cancelled) return;
+        cleanup();
+        if (map.getSource(SRC)) return;
+        map.addSource(SRC, { type: "geojson", data: fc });
+        // Color each basin from a small earth-tone palette via a
+        // hash of huc4. Keeps adjacent basins visually distinct
+        // without a full named-color map (24 basins is a lot).
+        map.addLayer({
+          id: FILL,
+          type: "fill",
+          source: SRC,
+          paint: {
+            "fill-color": [
+              "match",
+              ["%", ["to-number", ["get", "huc4"]], 6],
+              0, "#9bb5a8",
+              1, "#b58a52",
+              2, "#7a9b6b",
+              3, "#cdb38a",
+              4, "#4a8a72",
+              5, "#a7794a",
+              "#9a8a6e",
+            ],
+            "fill-opacity": 0.18,
+            "fill-antialias": true,
+          },
+        });
+        map.addLayer({
+          id: LINE,
+          type: "line",
+          source: SRC,
+          paint: {
+            "line-color": "#2a5e6a",
+            "line-opacity": 0.55,
+            "line-width": 1,
+            "line-dasharray": [2, 1.5],
+          },
+        });
+        // Sit below the outside-TX mask + outline.
+        try {
+          if (map.getLayer("dryline-outside-tx-mask-fill")) {
+            map.moveLayer(FILL, "dryline-outside-tx-mask-fill");
+            map.moveLayer(LINE, "dryline-outside-tx-mask-fill");
+          }
+        } catch { /* idempotent */ }
+
+        // Hover popup naming the basin.
+        const ml = await import("maplibre-gl");
+        const popup = new ml.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 8,
+          className: "dryline-basin-popup",
+        });
+        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+          features?: import("maplibre-gl").MapGeoJSONFeature[];
+        };
+        const escape = (s: string) =>
+          s.replace(/[&<>"']/g, (c) =>
+            c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+          );
+        const onMove = (e: MoveEvt) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const p = f.properties as { name?: string; huc4?: string; states?: string };
+          map.getCanvas().style.cursor = "help";
+          popup
+            .setLngLat(e.lngLat)
+            .setHTML(`<div style="padding:6px 10px;max-width:240px">
+              <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">River basin · HUC ${escape(p.huc4 ?? "—")}</div>
+              <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.name ?? "—")}</div>
+              ${p.states ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:3px">${escape(p.states)}</div>` : ""}
+            </div>`)
+            .addTo(map);
+        };
+        const onLeave = () => {
+          map.getCanvas().style.cursor = "";
+          popup.remove();
+        };
+        map.on("mousemove", FILL, onMove);
+        map.on("mouseleave", FILL, onLeave);
+        (map as MapInstance & { __basinHandlers?: { onMove: typeof onMove; onLeave: typeof onLeave; popup: PopupInstance } }).__basinHandlers = { onMove, onLeave, popup };
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TexasMap] basins failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
+        features?: import("maplibre-gl").MapGeoJSONFeature[];
+      };
+      const handlers = (
+        map as MapInstance & {
+          __basinHandlers?: { onMove: (e: MoveEvt) => void; onLeave: () => void; popup: PopupInstance };
+        }
+      ).__basinHandlers;
+      if (handlers) {
+        try {
+          map.off("mousemove", FILL, handlers.onMove);
+          map.off("mouseleave", FILL, handlers.onLeave);
+          handlers.popup.remove();
+        } catch { /* idempotent */ }
+        delete (map as MapInstance & { __basinHandlers?: unknown }).__basinHandlers;
+      }
+      cleanup();
+    };
+  }, [layerState.basins, mapReadyState]);
 
   // ---- 5e. Dryline corridor (static GeoJSON) ----
   // A climatological band, not today's forecast. Lives near the

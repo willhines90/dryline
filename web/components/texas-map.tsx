@@ -777,7 +777,12 @@ export function TexasMap({
       const onEnter = (e: DemoEvt) => {
         const f = e.features?.[0];
         if (!f) return;
-        const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+        // Cast via unknown — geojson.Geometry includes GeometryCollection
+        // which has no `coordinates` field, so the direct cast fails the
+        // strict-mode compiler. We only render Point features anyway.
+        const g = f.geometry as unknown as { type?: string; coordinates?: [number, number] };
+        if (g.type !== "Point" || !g.coordinates) return;
+        const coords = g.coordinates;
         const p = f.properties as {
           label?: string;
           region?: string;
@@ -1396,7 +1401,9 @@ export function TexasMap({
       const onEnter = (e: ResEvt) => {
         const f = e.features?.[0];
         if (!f) return;
-        const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+        const g = f.geometry as unknown as { type?: string; coordinates?: [number, number] };
+        if (g.type !== "Point" || !g.coordinates) return;
+        const coords = g.coordinates;
         const p = f.properties as Parameters<typeof renderPopupHtml>[0];
         map.getCanvas().style.cursor = "pointer";
         popup.setLngLat(coords).setHTML(renderPopupHtml(p)).addTo(map);
@@ -1408,7 +1415,9 @@ export function TexasMap({
       const onClick = (e: ResEvt) => {
         const f = e.features?.[0];
         if (!f) return;
-        const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+        const g = f.geometry as unknown as { type?: string; coordinates?: [number, number] };
+        if (g.type !== "Point" || !g.coordinates) return;
+        const coords = g.coordinates;
         const p = f.properties as { slug?: string; name?: string };
         if (!p.name) return;
         const synth: MapLocation = {
@@ -2576,7 +2585,8 @@ export function TexasMap({
       return;
     }
 
-    const palette: Record<string, string> = {
+    type AlertBucket = "tornado" | "severe" | "flood" | "winter" | "heat" | "other";
+    const palette: Record<AlertBucket, string> = {
       tornado: "#6f1d10",
       severe: "#b13a1f",
       flood: "#0d3b6f",
@@ -2680,7 +2690,10 @@ export function TexasMap({
               areaDesc?: string;
               expires?: string | null;
             };
-            const color = (p.bucket && palette[p.bucket]) || palette.other;
+            const color =
+              p.bucket && p.bucket in palette
+                ? palette[p.bucket as AlertBucket]
+                : palette.other;
             map.getCanvas().style.cursor = "help";
             popup
               .setLngLat(e.lngLat)

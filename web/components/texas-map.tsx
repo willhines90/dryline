@@ -543,6 +543,12 @@ export function TexasMap({
             });
             wrap.addEventListener("click", (e) => {
               e.preventDefault();
+              // Brief click-confirmation pulse on the lake glyph before
+              // the investigation starts streaming on the right panel.
+              glyph.classList.remove("dryline-click-pulse");
+              void glyph.offsetWidth; // reflow so the animation restarts
+              glyph.classList.add("dryline-click-pulse");
+              setTimeout(() => glyph.classList.remove("dryline-click-pulse"), 600);
               // Build a synthetic location so the existing investigation
               // pipeline can be triggered without special-casing the
               // payload shape. resolve_location will refine the address.
@@ -629,6 +635,12 @@ export function TexasMap({
             });
             wrap.addEventListener("click", (e) => {
               e.preventDefault();
+              // Click-confirmation pulse on the teardrop so the user
+              // sees their click landed before the right panel updates.
+              dot.classList.remove("dryline-click-pulse");
+              void dot.offsetWidth;
+              dot.classList.add("dryline-click-pulse");
+              setTimeout(() => dot.classList.remove("dryline-click-pulse"), 600);
               onLocationClickRef.current?.(location);
             });
             markersRef.current.push({ slug: location.id, marker, popup, dot, pings });
@@ -1882,132 +1894,8 @@ export function TexasMap({
     <div className="relative h-full min-h-0 overflow-hidden bg-foam">
       <div ref={containerRef} className="dryline-map absolute inset-0" />
 
-      {/* Branded multi-section legend (bottom-left). Editorial card with
-          drought ramp, gauge color stops, and pin-key — spelled out so a
-          first-time viewer doesn't have to guess what they're looking at. */}
-      <div
-        className={cn(
-          "pointer-events-none absolute left-4 bottom-4 max-w-[260px]",
-          "border backdrop-blur-sm shadow-paper",
-          dark
-            ? "border-aquifer/50 bg-[rgba(8,14,22,0.85)] text-spring"
-            : "border-rule bg-paper/95 text-ink",
-        )}
-      >
-        <div
-          className={cn(
-            "px-3 py-2 border-b font-mono text-[10px] tracking-[0.18em] uppercase",
-            dark ? "border-aquifer/40 text-spring/80" : "border-rule text-tideline",
-          )}
-        >
-          Legend · Texas water
-        </div>
-        <div className="px-3 py-2.5 space-y-3">
-          {/* Drought ramp */}
-          <div>
-            <div className={cn(
-              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
-              dark ? "text-spring/70" : "text-tideline",
-            )}>
-              Drought · USDM
-            </div>
-            <div className="flex h-2.5">
-              {DROUGHT_COLORS.map((c, i) => (
-                <div key={i} className="flex-1" style={{ background: c }} />
-              ))}
-            </div>
-            <div className={cn(
-              "flex justify-between font-mono text-[8.5px] tracking-[0.16em] uppercase mt-0.5",
-              dark ? "text-spring/60" : "text-tideline",
-            )}>
-              <span>D0</span><span>D1</span><span>D2</span><span>D3</span><span>D4</span>
-            </div>
-          </div>
-          {/* Stream gauge stops */}
-          <div>
-            <div className={cn(
-              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
-              dark ? "text-spring/70" : "text-tideline",
-            )}>
-              Stream gauges · cfs
-            </div>
-            <div className="flex items-center gap-1.5 text-[10.5px]">
-              <Swatch color={dark ? "#3a4d56" : "#4a6c78"} />
-              <span className={dark ? "text-spring/80" : "text-ink/85"}>dry · &lt; 0.5</span>
-              <Swatch color={dark ? "#d6a06a" : "#b58a52"} />
-              <span className={dark ? "text-spring/80" : "text-ink/85"}>low · &lt; 50</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[10.5px] mt-0.5">
-              <Swatch color={dark ? "#7ad6e9" : "#4a8aa8"} />
-              <span className={dark ? "text-spring/80" : "text-ink/85"}>normal · &lt; 500</span>
-              <Swatch color={dark ? "#5fc7ff" : "#0d3b6f"} />
-              <span className={dark ? "text-spring/80" : "text-ink/85"}>high · 500+</span>
-            </div>
-          </div>
-          {/* Pin key — every shape here matches the actual glyph rendered
-              on the map. Click any pin to investigate the location. */}
-          <div>
-            <div className={cn(
-              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
-              dark ? "text-spring/70" : "text-tideline",
-            )}>
-              Pins · click to investigate
-            </div>
-            <ul className="space-y-1 text-[10.5px] leading-snug">
-              <li className="flex items-center gap-1.5">
-                <span
-                  aria-hidden
-                  className="inline-flex items-center"
-                  style={{ width: 22, height: 14 }}
-                  dangerouslySetInnerHTML={{ __html: teardropPinHtml("#0d3b6f", "#9ec5cf") }}
-                />
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>Sample address</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span
-                  aria-hidden
-                  className="inline-flex items-center"
-                  style={{ width: 22, height: 14 }}
-                  dangerouslySetInnerHTML={{ __html: lakeGlyphHtml("#0d3b6f", "#061f3d") }}
-                />
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>Reservoir · live data</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span
-                  aria-hidden
-                  className="relative inline-block"
-                  style={{ width: 12, height: 12 }}
-                >
-                  <span
-                    className="absolute inset-0 rounded-full border-[1.6px]"
-                    style={{
-                      background: dark ? "#0a0e16" : "#eef2f3",
-                      borderColor: "#4a8aa8",
-                    }}
-                  />
-                  <span
-                    className="absolute rounded-full"
-                    style={{
-                      width: 4,
-                      height: 4,
-                      background: "#4a8aa8",
-                      top: 4,
-                      left: 4,
-                    }}
-                  />
-                </span>
-                <span className={dark ? "text-spring/85" : "text-ink/90"}>USGS gauge · cfs</span>
-              </li>
-            </ul>
-            <div className={cn(
-              "mt-1.5 font-serif italic text-[10px] leading-tight",
-              dark ? "text-spring/60" : "text-tideline",
-            )}>
-              Reservoir color = drought severity (full ↔ critical).
-            </div>
-          </div>
-        </div>
-      </div>
+      <MapLegend dark={dark} />
+
 
       <LayerControl
         specs={LAYER_SPECS}
@@ -2023,6 +1911,179 @@ export function TexasMap({
             Map failed to mount
           </div>
           <div className="font-mono">{mountError}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Collapsible map legend (bottom-left). Mirrors the Layers panel pattern:
+ * a single header bar that toggles the body open/closed, with localStorage
+ * persistence so it stays where you left it. Internally three sections:
+ * Pins (what shapes mean), Drought ramp, Stream gauges by cfs.
+ */
+function MapLegend({ dark }: { dark: boolean }) {
+  const LS_KEY = "dryline.legend-open.v1";
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw === "0") setOpen(false);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const onToggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(LS_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+  return (
+    <div
+      className={cn(
+        "pointer-events-auto absolute left-4 bottom-4 w-[240px]",
+        "border backdrop-blur-sm shadow-paper",
+        dark
+          ? "border-aquifer/50 bg-[rgba(8,14,22,0.85)] text-spring"
+          : "border-rule bg-paper-deep/95 text-ink",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2",
+          "font-mono text-[10px] tracking-[0.18em] uppercase",
+          dark ? "text-spring hover:text-paper" : "text-tideline hover:text-ink",
+        )}
+        aria-expanded={open}
+      >
+        <span>Legend</span>
+        <span aria-hidden>{open ? "−" : "+"}</span>
+      </button>
+      {open ? (
+        <div className={cn("border-t px-3 py-2.5 space-y-3", dark ? "border-aquifer/40" : "border-rule")}>
+          {/* Section 1: Pins — what each shape means. Most important to surface first. */}
+          <div>
+            <div className={cn(
+              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1.5",
+              dark ? "text-spring/70" : "text-tideline",
+            )}>
+              What's on the map
+            </div>
+            <ul className="space-y-1.5 text-[11px] leading-snug">
+              <li className="flex items-start gap-2">
+                <span
+                  aria-hidden
+                  className="inline-flex items-center justify-center shrink-0"
+                  style={{ width: 18, height: 22 }}
+                  dangerouslySetInnerHTML={{ __html: teardropPinHtml("#0d3b6f", "#9ec5cf") }}
+                />
+                <span className={dark ? "text-spring/90" : "text-ink/90"}>
+                  <span className="font-serif">Sample address</span>
+                  <span className={cn("block font-mono text-[9.5px] tracking-[0.04em]", dark ? "text-spring/60" : "text-tideline")}>
+                    Click to investigate
+                  </span>
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span
+                  aria-hidden
+                  className="inline-flex items-center justify-center shrink-0"
+                  style={{ width: 22, height: 16 }}
+                  dangerouslySetInnerHTML={{ __html: lakeGlyphHtml("#0d3b6f", "#061f3d") }}
+                />
+                <span className={dark ? "text-spring/90" : "text-ink/90"}>
+                  <span className="font-serif">Reservoir</span>
+                  <span className={cn("block font-mono text-[9.5px] tracking-[0.04em]", dark ? "text-spring/60" : "text-tideline")}>
+                    Color = drought (full → critical)
+                  </span>
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span
+                  aria-hidden
+                  className="relative inline-block shrink-0"
+                  style={{ width: 14, height: 14, marginTop: 4 }}
+                >
+                  <span
+                    className="absolute inset-0 rounded-full border-[1.6px]"
+                    style={{
+                      background: dark ? "#0a0e16" : "#eef2f3",
+                      borderColor: "#4a8aa8",
+                    }}
+                  />
+                  <span
+                    className="absolute rounded-full"
+                    style={{ width: 4, height: 4, background: "#4a8aa8", top: 5, left: 5 }}
+                  />
+                </span>
+                <span className={dark ? "text-spring/90" : "text-ink/90"}>
+                  <span className="font-serif">USGS stream gauge</span>
+                  <span className={cn("block font-mono text-[9.5px] tracking-[0.04em]", dark ? "text-spring/60" : "text-tideline")}>
+                    Color = current flow
+                  </span>
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Section 2: Drought ramp */}
+          <div>
+            <div className={cn(
+              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
+              dark ? "text-spring/70" : "text-tideline",
+            )}>
+              Drought severity (USDM)
+            </div>
+            <div className="flex h-2.5 border" style={{ borderColor: dark ? "rgba(158,197,207,0.3)" : "rgba(7,23,31,0.15)" }}>
+              {DROUGHT_COLORS.map((c, i) => (
+                <div key={i} className="flex-1" style={{ background: c }} />
+              ))}
+            </div>
+            <div className={cn(
+              "flex justify-between font-mono text-[8.5px] tracking-[0.04em] mt-0.5",
+              dark ? "text-spring/60" : "text-tideline",
+            )}>
+              <span>Abnormal</span>
+              <span>Exceptional</span>
+            </div>
+          </div>
+
+          {/* Section 3: Gauge flow stops */}
+          <div>
+            <div className={cn(
+              "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1",
+              dark ? "text-spring/70" : "text-tideline",
+            )}>
+              Stream flow (cfs)
+            </div>
+            <ul className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10.5px]">
+              <li className="flex items-center gap-1.5">
+                <Swatch color={dark ? "#3a4d56" : "#4a6c78"} />
+                <span className={dark ? "text-spring/80" : "text-ink/85"}>Dry · &lt; 0.5</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Swatch color={dark ? "#d6a06a" : "#b58a52"} />
+                <span className={dark ? "text-spring/80" : "text-ink/85"}>Low · &lt; 50</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Swatch color={dark ? "#7ad6e9" : "#4a8aa8"} />
+                <span className={dark ? "text-spring/80" : "text-ink/85"}>Normal · &lt; 500</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Swatch color={dark ? "#5fc7ff" : "#0d3b6f"} />
+                <span className={dark ? "text-spring/80" : "text-ink/85"}>High · 500+</span>
+              </li>
+            </ul>
+          </div>
         </div>
       ) : null}
     </div>

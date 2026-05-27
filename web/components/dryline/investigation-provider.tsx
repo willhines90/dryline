@@ -300,9 +300,19 @@ function useSlotState(getAgentic: () => boolean): {
 const LS_AGENTIC = "dryline.agentic-mode.v1";
 
 export function InvestigationProvider({ children }: { children: React.ReactNode }) {
+  // Agentic mode is now an "advanced / demo" knob with no UI toggle. It
+  // turns on via `?agent=1` (or its prior localStorage value, so the
+  // setting persists once a demo user has flipped it). See About modal.
   const [agenticMode, setAgenticModeState] = React.useState<boolean>(false);
   React.useEffect(() => {
     try {
+      if (typeof window !== "undefined") {
+        const param = new URLSearchParams(window.location.search).get("agent");
+        if (param === "1" || param === "true") {
+          setAgenticModeState(true);
+          return;
+        }
+      }
       if (localStorage.getItem(LS_AGENTIC) === "1") setAgenticModeState(true);
     } catch {
       /* ignore */

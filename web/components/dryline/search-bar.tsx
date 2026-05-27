@@ -83,7 +83,9 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
   // dropdown reflects the latest query, not whichever request returns last.
   React.useEffect(() => {
     const text = q.trim();
-    if (text.length < 3) {
+    // 2-char threshold so users see live results almost as soon as they
+    // start typing (was 3, which made "TX" only show local results).
+    if (text.length < 2) {
       setLiveHits([]);
       setLiveLoading(false);
       return;
@@ -308,10 +310,16 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
         </span>
       </div>
 
+      {/* Empty-state: dropdown opens but no matches yet — show search-in-
+          progress feedback + free-text fallback so the user understands
+          something IS happening. */}
       {open && candidates.length === 0 && q.trim() ? (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-paper border border-ink shadow-paper z-[100]">
-          <div className="px-3 py-2.5 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
-            Free-text address
+          <div className="flex items-center justify-between px-3 py-2 font-mono text-[9.5px] tracking-[0.18em] text-tideline border-b border-rule">
+            <span>{liveLoading ? "Searching Texas addresses…" : "No Texas matches"}</span>
+            {liveLoading ? (
+              <span aria-hidden className="inline-block w-1.5 h-1.5 rounded-full bg-aquifer animate-dryline-pulse" />
+            ) : null}
           </div>
           <button
             type="button"

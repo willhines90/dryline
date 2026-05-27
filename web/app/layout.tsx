@@ -28,7 +28,7 @@ const geistMono = Geist_Mono({
 });
 
 const SITE_URL = "https://dryline.org";
-const TITLE = "Dryline — Investigate Texas water at any address";
+const TITLE = "Dryline - Investigate Texas water at any address";
 const DESCRIPTION =
   "Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. Type any Texas address and Dryline streams a cited investigation across drought, reservoirs, drinking water, aquifer monitoring, and federally-reportable industrial dischargers — every claim sourced, structured caveats, drafted civic action.";
 

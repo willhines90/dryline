@@ -99,18 +99,75 @@ interface ReservoirObservation {
  * Pick a fill color for the reservoir lake glyph based on how its current
  * percent_full compares to the same-day-of-year historical average.
  * Same color logic the synthesis card uses, kept in sync by hand.
+ *
+ * `tier` is a stable identifier (no spaces) used by the symbol layer's
+ * `icon-image` match expression to pick the right rasterized icon.
  */
+type ReservoirTier =
+  | "nodata"
+  | "critical"
+  | "low"
+  | "below-avg"
+  | "moderate"
+  | "near-full";
 function reservoirFill(pct: number | null, hist: number | null): {
   fill: string;
   stroke: string;
   label: string;
+  tier: ReservoirTier;
 } {
-  if (pct == null) return { fill: "#9ec5cf", stroke: "#4a6c78", label: "no data" };
-  if (pct < 30) return { fill: "#6f1d10", stroke: "#3a0d05", label: "critical" };
-  if (pct < 50) return { fill: "#a85a35", stroke: "#7a3d21", label: "low" };
-  if (hist != null && pct < hist - 10) return { fill: "#b58a52", stroke: "#7a5a2c", label: "below avg" };
-  if (pct < 75) return { fill: "#4a8aa8", stroke: "#2566a8", label: "moderate" };
-  return { fill: "#0d3b6f", stroke: "#061f3d", label: "near full" };
+  if (pct == null) return { fill: "#9ec5cf", stroke: "#4a6c78", label: "no data", tier: "nodata" };
+  if (pct < 30) return { fill: "#6f1d10", stroke: "#3a0d05", label: "critical", tier: "critical" };
+  if (pct < 50) return { fill: "#a85a35", stroke: "#7a3d21", label: "low", tier: "low" };
+  if (hist != null && pct < hist - 10) return { fill: "#b58a52", stroke: "#7a5a2c", label: "below avg", tier: "below-avg" };
+  if (pct < 75) return { fill: "#4a8aa8", stroke: "#2566a8", label: "moderate", tier: "moderate" };
+  return { fill: "#0d3b6f", stroke: "#061f3d", label: "near full", tier: "near-full" };
+}
+
+/**
+ * Rasterize an SVG markup string into an HTMLImageElement we can hand
+ * to MapLibre's `map.addImage`. Returns a 2x-density image so it stays
+ * crisp on retina displays.
+ */
+function svgToImage(svgString: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+  });
+}
+
+/** Build a 2x retina SVG of a lake glyph for the given tier. Returns the
+ *  full SVG document string, ready for svgToImage. */
+function lakeIconSvg(tier: ReservoirTier): string {
+  // Tier → matching fill/stroke. We can't call reservoirFill directly
+  // because pct/hist aren't known here — invert the table.
+  const swatch: Record<ReservoirTier, { fill: string; stroke: string }> = {
+    nodata: { fill: "#9ec5cf", stroke: "#4a6c78" },
+    critical: { fill: "#6f1d10", stroke: "#3a0d05" },
+    low: { fill: "#a85a35", stroke: "#7a3d21" },
+    "below-avg": { fill: "#b58a52", stroke: "#7a5a2c" },
+    moderate: { fill: "#4a8aa8", stroke: "#2566a8" },
+    "near-full": { fill: "#0d3b6f", stroke: "#061f3d" },
+  };
+  const { fill, stroke } = swatch[tier];
+  // 44×32 = 2× the visible 22×16 logical size. addImage with
+  // pixelRatio: 2 maps it back. A subtle drop shadow gives the icon
+  // weight against busy basemaps.
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="36" viewBox="0 0 48 36">
+    <defs>
+      <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="0.5" flood-color="#07171f" flood-opacity="0.32"/>
+      </filter>
+    </defs>
+    <g filter="url(#s)" transform="translate(2, 2)">
+      <path d="M 8 18 C 3 14, 3.6 9, 9 7 C 13 5.4, 18 6.4, 22 6 C 26.4 5.6, 31 3.6, 35 6 C 40 8.8, 42 14, 40 19 C 38 24, 33 26.4, 28 26.4 C 23 26.4, 18 27.6, 13 26 C 8 24.4, 5 21.6, 8 18 Z"
+            fill="${fill}" stroke="${stroke}" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M 12 15 Q 16 13, 20 15 T 28 15 T 34 15"
+            fill="none" stroke="#eef2f3" stroke-opacity="0.85" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+  </svg>`;
 }
 
 /**
@@ -349,17 +406,8 @@ export function TexasMap({
       pings: HTMLDivElement[];
     }>
   >([]);
-  const reservoirMarkersRef = useRef<
-    Array<{
-      slug: string;
-      marker: MarkerInstance;
-      popup: PopupInstance;
-      element: HTMLDivElement;
-      lat: number;
-      lng: number;
-      name: string;
-    }>
-  >([]);
+  // Note: reservoir HTML markers have been replaced with a MapLibre
+  // symbol layer (effect 4b). No per-marker ref needed anymore.
   const mapReadyRef = useRef(false);
   const [mapReadyState, setMapReadyState] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
@@ -505,76 +553,11 @@ export function TexasMap({
           mapReadyRef.current = true;
           setMapReadyState(true);
 
-          // Reservoirs — lake-pebble glyph, colored later by live %-full
-          // status, click triggers a full investigation centered on the
-          // reservoir. We render with neutral colors here and refresh
-          // glyph + tooltip in a second useEffect once TWDB data arrives.
-          for (const r of RESERVOIR_PINS) {
-            const wrap = document.createElement("button");
-            wrap.type = "button";
-            wrap.setAttribute("aria-label", `${r.name} — reservoir`);
-            wrap.style.cssText =
-              "background:transparent;border:none;cursor:pointer;padding:0;position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:18px;";
-            const glyph = document.createElement("div");
-            glyph.style.cssText =
-              "width:22px;height:14px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 0 rgba(7,23,31,0.25));transition:transform 200ms ease;";
-            const initial = reservoirFill(null, null);
-            glyph.innerHTML = lakeGlyphHtml(initial.fill, initial.stroke);
-            wrap.appendChild(glyph);
-            const popup = new maplibregl.Popup({
-              anchor: "bottom",
-              offset: 14,
-              closeButton: false,
-              closeOnClick: false,
-              className: "dryline-reservoir-popup",
-            }).setHTML(
-              `<div style="padding:6px 10px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div><div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px">${r.name}</div><div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px">Loading live data…</div></div>`,
-            );
-            const marker = new maplibregl.Marker({ element: wrap, anchor: "center" })
-              .setLngLat([r.lng, r.lat])
-              .addTo(map);
-            wrap.addEventListener("mouseenter", () => {
-              popup.setLngLat([r.lng, r.lat]).addTo(map);
-              glyph.style.transform = "scale(1.15)";
-            });
-            wrap.addEventListener("mouseleave", () => {
-              popup.remove();
-              glyph.style.transform = "scale(1)";
-            });
-            wrap.addEventListener("click", (e) => {
-              e.preventDefault();
-              // Brief click-confirmation pulse on the lake glyph before
-              // the investigation starts streaming on the right panel.
-              glyph.classList.remove("dryline-click-pulse");
-              void glyph.offsetWidth; // reflow so the animation restarts
-              glyph.classList.add("dryline-click-pulse");
-              setTimeout(() => glyph.classList.remove("dryline-click-pulse"), 600);
-              // Build a synthetic location so the existing investigation
-              // pipeline can be triggered without special-casing the
-              // payload shape. resolve_location will refine the address.
-              const synth: MapLocation = {
-                id: `reservoir:${r.slug}`,
-                label: `${r.name}`,
-                city: r.name.replace(/\b(Lake|Reservoir)\b/gi, "").trim(),
-                county: "",
-                region: "TX reservoir",
-                mode: "transparency",
-                headlineStory: `Investigation centered on ${r.name}.`,
-                approxLatLng: { lat: r.lat, lng: r.lng },
-                live: true,
-              };
-              onLocationClickRef.current?.(synth);
-            });
-            reservoirMarkersRef.current.push({
-              slug: r.slug,
-              marker,
-              popup,
-              element: glyph,
-              lat: r.lat,
-              lng: r.lng,
-              name: r.name,
-            });
-          }
+          // Reservoirs are no longer HTML markers — they're a MapLibre
+          // symbol layer added by a separate useEffect once the TWDB
+          // payload arrives. Symbol layers project through the same
+          // WebGL pipeline as drought / rivers / aquifers / gauges, so
+          // they don't lag behind those layers during zoom animations.
 
           // Demo address pins (top of marker stack) — teardrop shape so
           // they're visually distinct from the reservoir lake-glyphs and
@@ -662,8 +645,6 @@ export function TexasMap({
         marker.remove();
       });
       markersRef.current = [];
-      reservoirMarkersRef.current.forEach(({ marker }) => marker.remove());
-      reservoirMarkersRef.current = [];
       mapReadyRef.current = false;
       const ro = (mapRef.current as (MapInstance & { __ro?: ResizeObserver }) | null)?.__ro;
       ro?.disconnect();
@@ -970,68 +951,269 @@ export function TexasMap({
     };
   }, [layerState.drought, mapReadyState]);
 
-  // ---- 4b. Reservoir markers: hydrate with live TWDB data ----
+  // ---- 4b. Reservoir SYMBOL LAYER (WebGL-rendered) ----
   //
-  // When the TWDB payload arrives (or the markers re-mount after a hot
-  // reload), walk every reservoir marker and update its glyph color +
-  // hover tooltip in place. Keeps the markers cheap to create and
-  // cleanly separates the "render shape" path from the "fetch data"
-  // path.
+  // Reservoirs are rendered as a MapLibre symbol layer so they project
+  // through the same WebGL pipeline as the drought / rivers / aquifers
+  // layers — no JS-frame lag during zoom animations, no DOM marker
+  // drift, no rich-interactivity tax for 37 pins.
+  //
+  // - 6 raster icon variants (one per drought tier) registered on first
+  //   mount via `map.addImage`. Idempotent — survives HMR.
+  // - GeoJSON source rebuilt whenever the TWDB payload changes.
+  // - Hover popup rebuilt from feature properties on the fly so it
+  //   carries the rich sparkline + trend body.
+  // - Click triggers the same investigation pipeline as a demo pin.
+  const reservoirHandlersRef = useRef<{
+    onClick?: (e: import("maplibre-gl").MapMouseEvent) => void;
+    onEnter?: (e: import("maplibre-gl").MapMouseEvent) => void;
+    onLeave?: () => void;
+    popup?: PopupInstance;
+  }>({});
   useEffect(() => {
-    if (!mapReadyState) return;
-    for (const entry of reservoirMarkersRef.current) {
-      // Slug normalization: our hardcoded list uses underscores
-      // (`red_bluff`) while TWDB uses hyphens (`red-bluff`); the fetch
-      // effect indexes both forms so either lookup hits.
-      const live =
-        reservoirData.get(entry.slug) ??
-        reservoirData.get(entry.slug.replace(/_/g, "-"));
-      // Update glyph color.
-      const colors = reservoirFill(live?.pctFull ?? null, live?.historicalAvg ?? null);
-      entry.element.innerHTML = lakeGlyphHtml(colors.fill, colors.stroke);
-      // Update popup HTML.
-      const name = live?.name ?? entry.name;
-      let body: string;
-      if (live && live.pctFull != null) {
-        const pct = live.pctFull;
-        const hist = live.historicalAvg ?? null;
-        const t = live.trend7d ?? null;
-        const arrow = t == null ? "" : t > 0.3 ? "↗" : t < -0.3 ? "↘" : "→";
-        const trendLabel =
-          t == null
-            ? ""
-            : `<span style="color:${t > 0 ? "#0d3b6f" : t < 0 ? "#a85a35" : "#4a6c78"}">${arrow} ${t > 0 ? "+" : ""}${t.toFixed(1)} pts / 7d</span>`;
-        const spark = sparklineSvg(live.series, hist, { w: 130, h: 28 });
-        const histLine =
-          hist != null
-            ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">Hist. avg for today: ${hist.toFixed(1)}%</div>`
-            : "";
-        body = `
-          <div style="display:flex;align-items:baseline;gap:8px">
-            <div style="font-family:'Newsreader',serif;font-size:24px;color:${colors.fill};font-weight:600;line-height:1">${pct.toFixed(1)}<span style="font-size:14px;color:#4a6c78;font-weight:400">%</span></div>
-            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78;padding-top:2px">${colors.label}</div>
-          </div>
-          ${histLine}
-          <div style="margin-top:6px">${spark}</div>
-          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px;display:flex;justify-content:space-between;gap:6px"><span>${trendLabel}</span><span>${live.lastUpdated ?? ""}</span></div>
-        `;
-      } else {
-        body = `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">${live ? "No live readings published yet." : "Live data not in TWDB instantaneous feed."}</div>`;
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    const SRC = "dryline-reservoirs";
+    const LAYER = "dryline-reservoirs-symbols";
+    let cancelled = false;
+
+    type ResEvt = import("maplibre-gl").MapMouseEvent & {
+      features?: import("maplibre-gl").MapGeoJSONFeature[];
+    };
+
+    (async () => {
+      const ml = await import("maplibre-gl");
+
+      // 1. Register icons once.
+      const tiers: ReservoirTier[] = ["nodata", "critical", "low", "below-avg", "moderate", "near-full"];
+      for (const tier of tiers) {
+        const name = `dryline-reservoir-${tier}`;
+        if (map.hasImage(name)) continue;
+        try {
+          const img = await svgToImage(lakeIconSvg(tier));
+          if (cancelled) return;
+          if (!map.hasImage(name)) map.addImage(name, img, { pixelRatio: 2 });
+        } catch {
+          /* icon load failed; layer will fall back to nodata */
+        }
       }
-      entry.popup.setHTML(`<div style="padding:10px 12px;min-width:200px">
-        <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div>
-        <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;margin-top:2px;line-height:1.2">${name}</div>
-        ${body}
-        <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px;border-top:1px solid #c8d6da;padding-top:6px">Click to investigate ↗</div>
-      </div>`);
-    }
+
+      // 2. Build GeoJSON features from reservoirData. If empty, render
+      //    nothing — the data-fetch effect will trigger us again.
+      const features = Array.from(reservoirData.values())
+        // Dedupe: the fetch effect indexes each reservoir under both
+        // hyphen + underscore slug variants; Map.values() yields each
+        // twice. Filter by canonical slug.
+        .filter((r, i, arr) => arr.findIndex((x) => x.slug === r.slug) === i)
+        .map((r) => {
+          const tier = reservoirFill(r.pctFull, r.historicalAvg).tier;
+          return {
+            type: "Feature" as const,
+            geometry: { type: "Point" as const, coordinates: [r.lng, r.lat] },
+            properties: {
+              slug: r.slug,
+              name: r.name,
+              tier,
+              pctFull: r.pctFull,
+              historicalAvg: r.historicalAvg,
+              trend7d: r.trend7d,
+              series: JSON.stringify(r.series),
+              lastUpdated: r.lastUpdated,
+            },
+          };
+        });
+
+      // 3. Add or update the source.
+      const existing = map.getSource(SRC) as
+        | (import("maplibre-gl").GeoJSONSource & { setData: (d: unknown) => void })
+        | undefined;
+      const fc = { type: "FeatureCollection" as const, features };
+      if (existing) {
+        existing.setData(fc);
+      } else {
+        map.addSource(SRC, { type: "geojson", data: fc });
+      }
+
+      // 4. Add the symbol layer (idempotent).
+      if (!map.getLayer(LAYER)) {
+        map.addLayer({
+          id: LAYER,
+          type: "symbol",
+          source: SRC,
+          layout: {
+            "icon-image": [
+              "match",
+              ["get", "tier"],
+              "critical", "dryline-reservoir-critical",
+              "low", "dryline-reservoir-low",
+              "below-avg", "dryline-reservoir-below-avg",
+              "moderate", "dryline-reservoir-moderate",
+              "near-full", "dryline-reservoir-near-full",
+              "dryline-reservoir-nodata",
+            ],
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-anchor": "center",
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              4, 0.7,
+              7, 0.85,
+              10, 1.0,
+              13, 1.15,
+            ],
+          },
+        });
+      }
+
+      // 5. Position below the outside-TX mask so reservoirs stay clipped
+      //    to the state visually (consistent with the other data layers).
+      try {
+        if (map.getLayer("dryline-outside-tx-mask-fill")) {
+          map.moveLayer(LAYER, "dryline-outside-tx-mask-fill");
+        }
+      } catch {
+        /* idempotent */
+      }
+
+      // 6. Wire interactivity. Reuse one popup instance.
+      const popup =
+        reservoirHandlersRef.current.popup ??
+        new ml.Popup({
+          anchor: "bottom",
+          offset: 18,
+          closeButton: false,
+          closeOnClick: false,
+          className: "dryline-reservoir-popup",
+        });
+
+      const renderPopupHtml = (p: {
+        slug?: string;
+        name?: string;
+        tier?: string;
+        pctFull?: number | null;
+        historicalAvg?: number | null;
+        trend7d?: number | null;
+        series?: string;
+        lastUpdated?: string | null;
+      }) => {
+        const tier = (p.tier ?? "nodata") as ReservoirTier;
+        const fillForTier: Record<ReservoirTier, { fill: string; label: string }> = {
+          nodata: { fill: "#4a6c78", label: "no data" },
+          critical: { fill: "#6f1d10", label: "critical" },
+          low: { fill: "#a85a35", label: "low" },
+          "below-avg": { fill: "#b58a52", label: "below avg" },
+          moderate: { fill: "#4a8aa8", label: "moderate" },
+          "near-full": { fill: "#0d3b6f", label: "near full" },
+        };
+        const colors = fillForTier[tier] ?? fillForTier.nodata;
+        const pct = p.pctFull;
+        const hist = p.historicalAvg ?? null;
+        const t = p.trend7d ?? null;
+        let series: Array<{ d: string; v: number }> = [];
+        if (typeof p.series === "string" && p.series.length > 0) {
+          try {
+            series = JSON.parse(p.series);
+          } catch {
+            series = [];
+          }
+        }
+        let body: string;
+        if (typeof pct === "number") {
+          const arrow = t == null ? "" : t > 0.3 ? "↗" : t < -0.3 ? "↘" : "→";
+          const trendLabel =
+            t == null
+              ? ""
+              : `<span style="color:${t > 0 ? "#0d3b6f" : t < 0 ? "#a85a35" : "#4a6c78"}">${arrow} ${t > 0 ? "+" : ""}${t.toFixed(1)} pts / 7d</span>`;
+          const spark = sparklineSvg(series, hist, { w: 130, h: 28 });
+          const histLine =
+            hist != null
+              ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">Hist. avg for today: ${hist.toFixed(1)}%</div>`
+              : "";
+          body = `
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <div style="font-family:'Newsreader',serif;font-size:24px;color:${colors.fill};font-weight:600;line-height:1">${pct.toFixed(1)}<span style="font-size:14px;color:#4a6c78;font-weight:400">%</span></div>
+              <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78;padding-top:2px">${colors.label}</div>
+            </div>
+            ${histLine}
+            <div style="margin-top:6px">${spark}</div>
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px;display:flex;justify-content:space-between;gap:6px"><span>${trendLabel}</span><span>${p.lastUpdated ?? ""}</span></div>
+          `;
+        } else {
+          body = `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">No live readings published.</div>`;
+        }
+        return `<div style="padding:10px 12px;min-width:200px">
+          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div>
+          <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;margin-top:2px;line-height:1.2">${p.name ?? "—"}</div>
+          ${body}
+          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px;border-top:1px solid #c8d6da;padding-top:6px">Click to investigate ↗</div>
+        </div>`;
+      };
+
+      const onEnter = (e: ResEvt) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+        const p = f.properties as Parameters<typeof renderPopupHtml>[0];
+        map.getCanvas().style.cursor = "pointer";
+        popup.setLngLat(coords).setHTML(renderPopupHtml(p)).addTo(map);
+      };
+      const onLeave = () => {
+        map.getCanvas().style.cursor = "";
+        popup.remove();
+      };
+      const onClick = (e: ResEvt) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+        const p = f.properties as { slug?: string; name?: string };
+        if (!p.name) return;
+        const synth: MapLocation = {
+          id: `reservoir:${p.slug}`,
+          label: p.name,
+          city: p.name.replace(/\b(Lake|Reservoir)\b/gi, "").trim(),
+          county: "",
+          region: "TX reservoir",
+          mode: "transparency",
+          headlineStory: `Investigation centered on ${p.name}.`,
+          approxLatLng: { lat: coords[1], lng: coords[0] },
+          live: true,
+        };
+        onLocationClickRef.current?.(synth);
+      };
+
+      // Detach prior handlers (HMR) before reattaching.
+      const prev = reservoirHandlersRef.current;
+      if (prev.onClick) map.off("click", LAYER, prev.onClick);
+      if (prev.onEnter) map.off("mouseenter", LAYER, prev.onEnter);
+      if (prev.onLeave) map.off("mouseleave", LAYER, prev.onLeave);
+
+      map.on("click", LAYER, onClick);
+      map.on("mouseenter", LAYER, onEnter);
+      map.on("mouseleave", LAYER, onLeave);
+      reservoirHandlersRef.current = { onClick, onEnter, onLeave, popup };
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [reservoirData, mapReadyState]);
 
-  // ---- 5. Reservoir visibility toggle ----
+  // ---- 5. Reservoir visibility toggle (symbol layer) ----
   useEffect(() => {
-    for (const { marker } of reservoirMarkersRef.current) {
-      const el = marker.getElement();
-      if (el) el.style.display = layerState.reservoirs ? "" : "none";
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    try {
+      if (map.getLayer("dryline-reservoirs-symbols")) {
+        map.setLayoutProperty(
+          "dryline-reservoirs-symbols",
+          "visibility",
+          layerState.reservoirs ? "visible" : "none",
+        );
+      }
+    } catch {
+      /* layer not mounted yet — the symbol-layer effect will sync on next render */
     }
   }, [layerState.reservoirs, mapReadyState]);
 
@@ -1865,29 +2047,15 @@ export function TexasMap({
   }, [layerState.aquifers, mapReadyState, dark]);
 
   // ---- 6. Storytelling: react to tool_result events ----
+  //
+  // The previous version pulsed individual reservoir DOM markers when
+  // the get_reservoirs tool fired. The reservoir layer is now WebGL-
+  // rendered (symbol layer), so there are no DOM nodes to animate per
+  // pin. The map's active-investigation radius disk (effect #3 below)
+  // already provides "thinking" feedback; per-feature pulses would
+  // require an additional animated circle layer and aren't worth it.
   useEffect(() => {
-    if (!traces || traces.length === 0) return;
-    const map = mapRef.current;
-    if (!map) return;
-    // Only react to the LATEST event we haven't seen.
-    const latest = traces[traces.length - 1];
-    if (!latest || latest.type !== "tool_result") return;
-
-    if (latest.toolName === "get_reservoirs") {
-      // Pulse markers whose slug matches one returned by the tool.
-      const data = latest.data as { reservoirs?: Array<{ slug?: string }> } | null;
-      const slugs = new Set((data?.reservoirs ?? []).map((r) => r.slug ?? "").filter(Boolean));
-      for (const { slug, element } of reservoirMarkersRef.current) {
-        if (slugs.has(slug)) {
-          element.style.transform = "scale(1.6)";
-          element.style.boxShadow = "0 0 0 4px rgba(13,59,111,0.35)";
-          window.setTimeout(() => {
-            element.style.transform = "scale(1)";
-            element.style.boxShadow = "0 0 0 1px rgba(7,23,31,0.18)";
-          }, 1400);
-        }
-      }
-    }
+    /* no-op for now — see comment */
   }, [traces]);
 
   return (

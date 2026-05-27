@@ -26,7 +26,6 @@ function Pin({ fill, ring }: { fill: string; ring: string }) {
 }
 
 type MapInstance = import("maplibre-gl").Map;
-type MarkerInstance = import("maplibre-gl").Marker;
 type PopupInstance = import("maplibre-gl").Popup;
 
 const TEXAS_BOUNDS: [[number, number], [number, number]] = [
@@ -228,11 +227,39 @@ function lakeGlyphHtml(fill: string, stroke: string): string {
   </svg>`;
 }
 
-/** Teardrop map-pin glyph for demo addresses. Color = mode/live. */
+/** Teardrop map-pin glyph for demo addresses. Color = mode/live.
+ *  Kept for the legend swatch only — pins on the map render via the
+ *  WebGL symbol layer (teardropIconSvg below). */
 function teardropPinHtml(fill: string, ring: string): string {
   return `<svg width="18" height="22" viewBox="0 0 18 22" aria-hidden="true">
     <path d="M 9 1.5 C 4.5 1.5 1.5 4.8 1.5 9 C 1.5 14.5 9 20.5 9 20.5 C 9 20.5 16.5 14.5 16.5 9 C 16.5 4.8 13.5 1.5 9 1.5 Z" fill="${fill}" stroke="${ring}" stroke-width="1.4"/>
     <circle cx="9" cy="9" r="2.6" fill="#eef2f3"/>
+  </svg>`;
+}
+
+/** Teardrop pin icon for the demo-address WebGL symbol layer. Renders at
+ *  2× density (36×44) so it stays crisp on retina. icon-anchor:bottom
+ *  aligns the tip with the lat/lng. */
+type DemoIconKey = "personal-live" | "personal-staged" | "transparency-live" | "transparency-staged";
+function demoIconSvg(key: DemoIconKey): string {
+  const palette: Record<DemoIconKey, { fill: string; ring: string }> = {
+    "personal-live": { fill: "#0d3b6f", ring: "#9ec5cf" },
+    "personal-staged": { fill: "#9ec5cf", ring: "#dde6e9" },
+    "transparency-live": { fill: "#b58a52", ring: "#7a5a2c" },
+    "transparency-staged": { fill: "#cdb38a", ring: "#9c7a52" },
+  };
+  const { fill, ring } = palette[key];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+    <defs>
+      <filter id="s" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="0.9" flood-color="#07171f" flood-opacity="0.42"/>
+      </filter>
+    </defs>
+    <g filter="url(#s)">
+      <path d="M 18 3 C 9 3 3 9.6 3 18 C 3 29 18 41 18 41 C 18 41 33 29 33 18 C 33 9.6 27 3 18 3 Z"
+            fill="${fill}" stroke="${ring}" stroke-width="2.8" stroke-linejoin="round"/>
+      <circle cx="18" cy="18" r="5.2" fill="#eef2f3"/>
+    </g>
   </svg>`;
 }
 
@@ -397,17 +424,8 @@ export function TexasMap({
 }: TexasMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
-  const markersRef = useRef<
-    Array<{
-      slug: string;
-      marker: MarkerInstance;
-      popup: PopupInstance;
-      dot: HTMLDivElement;
-      pings: HTMLDivElement[];
-    }>
-  >([]);
-  // Note: reservoir HTML markers have been replaced with a MapLibre
-  // symbol layer (effect 4b). No per-marker ref needed anymore.
+  // Note: demo address pins AND reservoirs are both WebGL symbol
+  // layers now (effects 1c + 4b). No per-marker ref needed.
   const mapReadyRef = useRef(false);
   const [mapReadyState, setMapReadyState] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
@@ -559,75 +577,9 @@ export function TexasMap({
           // WebGL pipeline as drought / rivers / aquifers / gauges, so
           // they don't lag behind those layers during zoom animations.
 
-          // Demo address pins (top of marker stack) — teardrop shape so
-          // they're visually distinct from the reservoir lake-glyphs and
-          // the small circular gauges below them in the stack.
-          for (const location of locations) {
-            if (!location.approxLatLng) continue;
-            const colors = modeMarker(location.mode, location.live);
-            const wrap = document.createElement("button");
-            wrap.type = "button";
-            wrap.setAttribute("aria-label", location.label);
-            wrap.style.cssText =
-              "background:transparent;border:none;cursor:pointer;padding:0;position:relative;display:flex;align-items:flex-end;justify-content:center;width:22px;height:26px;";
-
-            // Ping rings — three staggered, hidden until the pin
-            // is the focused-active one. CSS keyframes handle the
-            // expanding-fade animation; we just toggle a class.
-            const pingHost = document.createElement("div");
-            pingHost.style.cssText = "position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;";
-            const pings: HTMLDivElement[] = [];
-            for (let i = 0; i < 3; i++) {
-              const ring = document.createElement("div");
-              ring.className = `dryline-focus-ping${i === 1 ? " delay-1" : i === 2 ? " delay-2" : ""}`;
-              ring.style.background = colors.fill;
-              ring.style.opacity = "0";
-              pingHost.appendChild(ring);
-              pings.push(ring);
-            }
-            wrap.appendChild(pingHost);
-
-            const dot = document.createElement("div");
-            dot.style.cssText = `width:18px;height:22px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 1px rgba(7,23,31,0.35));transition:transform 200ms ease;position:relative;z-index:1;`;
-            dot.innerHTML = teardropPinHtml(colors.fill, colors.ring);
-            wrap.appendChild(dot);
-
-            const popup = new maplibregl.Popup({
-              anchor: "bottom",
-              offset: 14,
-              closeButton: false,
-              closeOnClick: false,
-              className: "dryline-demo-popup",
-            }).setHTML(
-              `<div style="padding:8px 12px;max-width:240px"><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Sample address · ${location.region}</div><div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;line-height:1.2;margin-top:4px">${location.label}</div><div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${(location as DemoLocation & { headlineStory?: string }).headlineStory ?? ""}</div><div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px">Click pin to investigate ↗</div></div>`,
-            );
-            // anchor: "bottom" pins the teardrop's *tip* (not its center)
-            // to the lat/lng. Without this the visual tip floats ~10px
-            // south of the actual location and the popup sits awkwardly
-            // far above the pin.
-            const marker = new maplibregl.Marker({ element: wrap, anchor: "bottom" })
-              .setLngLat([location.approxLatLng.lng, location.approxLatLng.lat])
-              .addTo(map);
-            wrap.addEventListener("mouseenter", () => {
-              popup.setLngLat([location.approxLatLng!.lng, location.approxLatLng!.lat]).addTo(map);
-              dot.style.transform = "scale(1.12)";
-            });
-            wrap.addEventListener("mouseleave", () => {
-              popup.remove();
-              dot.style.transform = "scale(1)";
-            });
-            wrap.addEventListener("click", (e) => {
-              e.preventDefault();
-              // Click-confirmation pulse on the teardrop so the user
-              // sees their click landed before the right panel updates.
-              dot.classList.remove("dryline-click-pulse");
-              void dot.offsetWidth;
-              dot.classList.add("dryline-click-pulse");
-              setTimeout(() => dot.classList.remove("dryline-click-pulse"), 600);
-              onLocationClickRef.current?.(location);
-            });
-            markersRef.current.push({ slug: location.id, marker, popup, dot, pings });
-          }
+          // Demo address pins are now a WebGL symbol layer too — see
+          // effect 1c below. Keeping them in the same pipeline as
+          // reservoirs guarantees zero drift across zoom animations.
         });
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -640,11 +592,6 @@ export function TexasMap({
 
     return () => {
       cancelled = true;
-      markersRef.current.forEach(({ marker, popup }) => {
-        popup.remove();
-        marker.remove();
-      });
-      markersRef.current = [];
       mapReadyRef.current = false;
       const ro = (mapRef.current as (MapInstance & { __ro?: ResizeObserver }) | null)?.__ro;
       ro?.disconnect();
@@ -673,31 +620,305 @@ export function TexasMap({
     else map.once("load", apply);
   }, [focusedLocation]);
 
-  // ---- 2a. Focused address pulse ----
-  // While an investigation is active, the focused pin "pings" — three
-  // staggered expanding rings — and its dot gets a slightly stronger
-  // halo. When idle (no investigation), the focused dot still reads
-  // as larger so users see what they clicked.
+  // ---- 1c. Demo address pin SYMBOL LAYER ----
+  //
+  // Same WebGL approach as the reservoir layer. Eliminates the JS-
+  // frame lag that made HTML demo markers visibly drift during zoom
+  // animations. icon-anchor:bottom puts the teardrop tip exactly on
+  // the lat/lng (no popup-vs-pin alignment math).
+  const demoHandlersRef = useRef<{
+    onClick?: (e: import("maplibre-gl").MapMouseEvent) => void;
+    onEnter?: (e: import("maplibre-gl").MapMouseEvent) => void;
+    onLeave?: () => void;
+    popup?: PopupInstance;
+  }>({});
   useEffect(() => {
-    const focusedId = focusedLocation?.id;
-    for (const entry of markersRef.current) {
-      const isFocused = !!focusedId && entry.slug === focusedId;
-      const running = isFocused && !!investigationActive;
-      for (const ring of entry.pings) {
-        ring.classList.toggle("is-running", running);
-        ring.style.opacity = running ? "" : "0";
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    const SRC = "dryline-demo-pins";
+    const LAYER = "dryline-demo-pins-symbols";
+    let cancelled = false;
+
+    type DemoEvt = import("maplibre-gl").MapMouseEvent & {
+      features?: import("maplibre-gl").MapGeoJSONFeature[];
+    };
+
+    (async () => {
+      const ml = await import("maplibre-gl");
+
+      // Register icon variants once. 4 keys = mode × live/staged so
+      // a not-yet-live demo can render in a faded variant if needed.
+      const keys: DemoIconKey[] = [
+        "personal-live",
+        "personal-staged",
+        "transparency-live",
+        "transparency-staged",
+      ];
+      for (const k of keys) {
+        const name = `dryline-demo-${k}`;
+        if (map.hasImage(name)) continue;
+        try {
+          const img = await svgToImage(demoIconSvg(k));
+          if (cancelled) return;
+          if (!map.hasImage(name)) map.addImage(name, img, { pixelRatio: 2 });
+        } catch {
+          /* swallow */
+        }
       }
-      if (isFocused) {
-        entry.dot.style.transform = running ? "scale(1.32)" : "scale(1.15)";
-        entry.dot.style.boxShadow = running
-          ? "0 0 0 4px rgba(13,59,111,0.28), 0 0 0 1px rgba(7,23,31,0.55)"
-          : "0 0 0 2px rgba(13,59,111,0.22), 0 0 0 1px rgba(7,23,31,0.5)";
+
+      // Build features from the locations prop. Store the full location
+      // payload in JSON form on each feature so the click + hover
+      // handlers can hand it straight back to handlePick.
+      const features = locations
+        .filter((l) => l.approxLatLng)
+        .map((l) => {
+          const mode = l.mode ?? "personal";
+          const live = l.live === false ? "staged" : "live";
+          const iconKey: DemoIconKey = `${mode}-${live}` as DemoIconKey;
+          return {
+            type: "Feature" as const,
+            geometry: {
+              type: "Point" as const,
+              coordinates: [l.approxLatLng!.lng, l.approxLatLng!.lat],
+            },
+            properties: {
+              id: l.id,
+              label: l.label,
+              region: l.region,
+              headlineStory:
+                (l as DemoLocation & { headlineStory?: string }).headlineStory ?? "",
+              mode,
+              iconKey,
+              // Round-trip the full location through the feature so the
+              // click handler can reconstruct it without a lookup.
+              payload: JSON.stringify(l),
+            },
+          };
+        });
+
+      const fc = { type: "FeatureCollection" as const, features };
+      const existing = map.getSource(SRC) as
+        | (import("maplibre-gl").GeoJSONSource & { setData: (d: unknown) => void })
+        | undefined;
+      if (existing) {
+        existing.setData(fc);
       } else {
-        entry.dot.style.transform = "scale(1)";
-        entry.dot.style.boxShadow = "0 0 0 1px rgba(7,23,31,0.45)";
+        map.addSource(SRC, { type: "geojson", data: fc });
       }
+
+      if (!map.getLayer(LAYER)) {
+        map.addLayer({
+          id: LAYER,
+          type: "symbol",
+          source: SRC,
+          layout: {
+            "icon-image": [
+              "match",
+              ["get", "iconKey"],
+              "personal-live", "dryline-demo-personal-live",
+              "personal-staged", "dryline-demo-personal-staged",
+              "transparency-live", "dryline-demo-transparency-live",
+              "transparency-staged", "dryline-demo-transparency-staged",
+              "dryline-demo-personal-live",
+            ],
+            "icon-anchor": "bottom",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              4, 0.55,
+              7, 0.75,
+              10, 0.95,
+              13, 1.1,
+            ],
+          },
+        });
+      }
+
+      // Demo pins sit on TOP of all other layers (above the mask, above
+      // the outline). They're the primary call-to-action so they win
+      // z-order even when overlapping.
+      // (Default layer order: newly-added layer is on top, so no move
+      // needed unless we mounted before another layer — handled below.)
+
+      const popup =
+        demoHandlersRef.current.popup ??
+        new ml.Popup({
+          anchor: "bottom",
+          offset: 28,
+          closeButton: false,
+          closeOnClick: false,
+          className: "dryline-demo-popup",
+        });
+
+      const onEnter = (e: DemoEvt) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+        const p = f.properties as {
+          label?: string;
+          region?: string;
+          headlineStory?: string;
+        };
+        map.getCanvas().style.cursor = "pointer";
+        const html = `<div style="padding:8px 12px;max-width:240px">
+          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Sample address · ${p.region ?? ""}</div>
+          <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;line-height:1.2;margin-top:4px">${p.label ?? ""}</div>
+          <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${p.headlineStory ?? ""}</div>
+          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px">Click pin to investigate ↗</div>
+        </div>`;
+        popup.setLngLat(coords).setHTML(html).addTo(map);
+      };
+      const onLeave = () => {
+        map.getCanvas().style.cursor = "";
+        popup.remove();
+      };
+      const onClick = (e: DemoEvt) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties as { payload?: string };
+        if (!p.payload) return;
+        try {
+          const loc = JSON.parse(p.payload) as MapLocation;
+          onLocationClickRef.current?.(loc);
+        } catch {
+          /* malformed */
+        }
+      };
+
+      const prev = demoHandlersRef.current;
+      if (prev.onClick) map.off("click", LAYER, prev.onClick);
+      if (prev.onEnter) map.off("mouseenter", LAYER, prev.onEnter);
+      if (prev.onLeave) map.off("mouseleave", LAYER, prev.onLeave);
+
+      map.on("click", LAYER, onClick);
+      map.on("mouseenter", LAYER, onEnter);
+      map.on("mouseleave", LAYER, onLeave);
+      demoHandlersRef.current = { onClick, onEnter, onLeave, popup };
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locations, mapReadyState]);
+
+  // ---- 2a. Focused address pulse (WebGL replacement for HTML rings) ----
+  //
+  // Single GeoJSON source with one point (the focused location). A
+  // circle layer pulses radius + opacity via requestAnimationFrame so
+  // the active pin reads as "investigating" without any DOM markup.
+  // Hidden when no focused location or when an investigation isn't
+  // active.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    const SRC = "dryline-focus-pulse";
+    const LAYER = "dryline-focus-pulse-circles";
+    const focused = focusedLocation?.approxLatLng;
+    let frame: number | null = null;
+    const cleanup = () => {
+      if (frame) cancelAnimationFrame(frame);
+      try {
+        if (map.getLayer(LAYER)) map.removeLayer(LAYER);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* idempotent */
+      }
+    };
+    if (!focused) return cleanup;
+    const fc = {
+      type: "FeatureCollection" as const,
+      features: [
+        {
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [focused.lng, focused.lat] },
+          properties: {},
+        },
+      ],
+    };
+    const existing = map.getSource(SRC) as
+      | (import("maplibre-gl").GeoJSONSource & { setData: (d: unknown) => void })
+      | undefined;
+    if (existing) {
+      existing.setData(fc);
+    } else {
+      map.addSource(SRC, { type: "geojson", data: fc });
     }
-  }, [focusedLocation, investigationActive]);
+    if (!map.getLayer(LAYER)) {
+      map.addLayer({
+        id: LAYER,
+        type: "circle",
+        source: SRC,
+        paint: {
+          "circle-radius": 14,
+          "circle-color": "#0d3b6f",
+          "circle-opacity": 0.18,
+          "circle-stroke-color": "#0d3b6f",
+          "circle-stroke-width": 1,
+          "circle-stroke-opacity": 0.4,
+        },
+      });
+    }
+
+    // Place the pulse layer BELOW the demo pin symbols so the teardrop
+    // stays on top.
+    try {
+      if (map.getLayer("dryline-demo-pins-symbols")) {
+        map.moveLayer(LAYER, "dryline-demo-pins-symbols");
+      }
+    } catch {
+      /* idempotent */
+    }
+
+    if (!investigationActive) {
+      // Static glow when focused but idle.
+      try {
+        map.setPaintProperty(LAYER, "circle-radius", 14);
+        map.setPaintProperty(LAYER, "circle-opacity", 0.18);
+        map.setPaintProperty(LAYER, "circle-stroke-opacity", 0.45);
+      } catch {
+        /* layer may not be mounted yet */
+      }
+      return cleanup;
+    }
+
+    // Active investigation: 1.8s sine-driven pulse.
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      try {
+        map.setPaintProperty(LAYER, "circle-radius", 22);
+        map.setPaintProperty(LAYER, "circle-opacity", 0.22);
+      } catch {
+        /* idempotent */
+      }
+      return cleanup;
+    }
+
+    const start = performance.now();
+    const tick = (ts: number) => {
+      const phase = ((ts - start) / 1800) * 2 * Math.PI;
+      const k = (Math.sin(phase) + 1) / 2; // 0..1
+      try {
+        map.setPaintProperty(LAYER, "circle-radius", 14 + k * 22); // 14..36
+        map.setPaintProperty(LAYER, "circle-opacity", 0.12 + (1 - k) * 0.18); // 0.30..0.12
+        map.setPaintProperty(LAYER, "circle-stroke-opacity", 0.5 - k * 0.3);
+      } catch {
+        cancelAnimationFrame(frame!);
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      // Don't remove the layer when transitioning between idle/active —
+      // only the outer cleanup (no focused location) removes it.
+    };
+  }, [focusedLocation, investigationActive, mapReadyState]);
 
   // ---- 3. Active investigation overlay (radius disk) ----
   // While an investigation runs we pulse the disk's fill-opacity and
@@ -1217,14 +1438,20 @@ export function TexasMap({
     }
   }, [layerState.reservoirs, mapReadyState]);
 
-  // ---- 5-bis. Sample-address visibility toggle ----
-  // The 7 demo address pins (Wimberley, Taylor, Fort Stockton, etc.)
-  // can be hidden to declutter the map when a user is focused on the
-  // live data layers (gauges, reservoirs).
+  // ---- 5-bis. Sample-address visibility toggle (symbol layer) ----
   useEffect(() => {
-    for (const { marker } of markersRef.current) {
-      const el = marker.getElement();
-      if (el) el.style.display = layerState.samples ? "" : "none";
+    const map = mapRef.current;
+    if (!map || !mapReadyState) return;
+    try {
+      if (map.getLayer("dryline-demo-pins-symbols")) {
+        map.setLayoutProperty(
+          "dryline-demo-pins-symbols",
+          "visibility",
+          layerState.samples ? "visible" : "none",
+        );
+      }
+    } catch {
+      /* layer not mounted yet */
     }
   }, [layerState.samples, mapReadyState]);
 

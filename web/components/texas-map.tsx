@@ -129,33 +129,6 @@ function reservoirFill(pct: number | null, hist: number | null): {
  * crisp on retina displays.
  */
 /**
- * Legacy hover-persist helper kept temporarily for callsites that
- * haven't been migrated to `setupLayerPopup` yet. Will be deleted
- * once all layers use the new model.
- */
-function bindPopupHoverPersist(
-  popup: import("maplibre-gl").Popup,
-  closeDelayMs = 280,
-): { cancelClose: () => void; scheduleClose: () => void; bindToElement: () => void } {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let bound = false;
-  const cancelClose = () => { if (timer) { clearTimeout(timer); timer = null; } };
-  const scheduleClose = () => {
-    cancelClose();
-    timer = setTimeout(() => { popup.remove(); timer = null; }, closeDelayMs);
-  };
-  const bindToElement = () => {
-    if (bound) return;
-    const el = popup.getElement();
-    if (!el) return;
-    el.addEventListener("mouseenter", cancelClose);
-    el.addEventListener("mouseleave", scheduleClose);
-    bound = true;
-  };
-  return { cancelClose, scheduleClose, bindToElement };
-}
-
-/**
  * Map-layer interaction model:
  *
  *   HOVER → transient preview popup (closes on mouseleave).
@@ -816,22 +789,12 @@ export function TexasMap({
   // frame lag that made HTML demo markers visibly drift during zoom
   // animations. icon-anchor:bottom puts the teardrop tip exactly on
   // the lat/lng (no popup-vs-pin alignment math).
-  const demoHandlersRef = useRef<{
-    onClick?: (e: import("maplibre-gl").MapMouseEvent) => void;
-    onEnter?: (e: import("maplibre-gl").MapMouseEvent) => void;
-    onLeave?: () => void;
-    popup?: PopupInstance;
-  }>({});
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReadyState) return;
     const SRC = "dryline-demo-pins";
     const LAYER = "dryline-demo-pins-symbols";
     let cancelled = false;
-
-    type DemoEvt = import("maplibre-gl").MapMouseEvent & {
-      features?: import("maplibre-gl").MapGeoJSONFeature[];
-    };
 
     (async () => {
       const ml = await import("maplibre-gl");
@@ -936,69 +899,58 @@ export function TexasMap({
       // (Default layer order: newly-added layer is on top, so no move
       // needed unless we mounted before another layer — handled below.)
 
-      const popup =
-        demoHandlersRef.current.popup ??
-        new ml.Popup({
-          anchor: "bottom",
-          offset: 28,
-          closeButton: false,
-          closeOnClick: false,
-          className: "dryline-demo-popup",
-        });
-
-      const onEnter = (e: DemoEvt) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        // Cast via unknown — geojson.Geometry includes GeometryCollection
-        // which has no `coordinates` field, so the direct cast fails the
-        // strict-mode compiler. We only render Point features anyway.
-        const g = f.geometry as unknown as { type?: string; coordinates?: [number, number] };
-        if (g.type !== "Point" || !g.coordinates) return;
-        const coords = g.coordinates;
-        const p = f.properties as {
-          label?: string;
-          region?: string;
-          headlineStory?: string;
-        };
-        map.getCanvas().style.cursor = "pointer";
-        const html = `<div style="padding:8px 12px;max-width:240px">
+      type DemoProps = {
+        label?: string;
+        region?: string;
+        headlineStory?: string;
+        payload?: string;
+      };
+      const renderDemoHtml = (p: DemoProps, pinned: boolean): string => `
+        <div style="padding:8px 12px;max-width:260px">
           <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Sample address · ${p.region ?? ""}</div>
           <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;line-height:1.2;margin-top:4px">${p.label ?? ""}</div>
-          <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${p.headlineStory ?? ""}</div>
-          <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;margin-top:8px">Click pin to investigate ↗</div>
+          ${pinned ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:6px;line-height:1.4">${p.headlineStory ?? ""}</div>
+          <div style="margin-top:10px;border-top:1px solid #c8d6da;padding-top:8px">
+            <button data-dryline-investigate style="cursor:pointer;background:#0d3b6f;color:#fff;border:none;padding:6px 10px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border-radius:2px">Investigate ↗</button>
+          </div>` : ""}
         </div>`;
-        popup.setLngLat(coords).setHTML(html).addTo(map);
-      };
-      const onLeave = () => {
-        map.getCanvas().style.cursor = "";
-        popup.remove();
-      };
-      const onClick = (e: DemoEvt) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const p = f.properties as { payload?: string };
-        if (!p.payload) return;
-        try {
-          const loc = JSON.parse(p.payload) as MapLocation;
-          onLocationClickRef.current?.(loc);
-        } catch {
-          /* malformed */
-        }
-      };
 
-      const prev = demoHandlersRef.current;
-      if (prev.onClick) map.off("click", LAYER, prev.onClick);
-      if (prev.onEnter) map.off("mouseenter", LAYER, prev.onEnter);
-      if (prev.onLeave) map.off("mouseleave", LAYER, prev.onLeave);
+      const prevCtl = (
+        map as MapInstance & { __demoPinPopupCtl?: LayerPopupController }
+      ).__demoPinPopupCtl;
+      prevCtl?.cleanup();
 
-      map.on("click", LAYER, onClick);
-      map.on("mouseenter", LAYER, onEnter);
-      map.on("mouseleave", LAYER, onLeave);
-      demoHandlersRef.current = { onClick, onEnter, onLeave, popup };
+      const ctl = setupLayerPopup(map, ml, {
+        layerId: LAYER,
+        hoverEvent: "mouseenter",
+        previewHtml: (f) => renderDemoHtml(f.properties as DemoProps, false),
+        pinnedHtml: (f) => renderDemoHtml(f.properties as DemoProps, true),
+        className: "dryline-demo-popup",
+        onInvestigate: (f) => {
+          const p = f.properties as DemoProps;
+          if (!p.payload) return;
+          try {
+            const loc = JSON.parse(p.payload) as MapLocation;
+            onLocationClickRef.current?.(loc);
+          } catch {
+            /* malformed */
+          }
+        },
+      });
+      (map as MapInstance & { __demoPinPopupCtl?: LayerPopupController }).__demoPinPopupCtl = ctl;
     })();
 
     return () => {
       cancelled = true;
+      const m = mapRef.current;
+      if (!m) return;
+      const ctl = (
+        m as MapInstance & { __demoPinPopupCtl?: LayerPopupController }
+      ).__demoPinPopupCtl;
+      if (ctl) {
+        ctl.cleanup();
+        delete (m as MapInstance & { __demoPinPopupCtl?: unknown }).__demoPinPopupCtl;
+      }
     };
   }, [locations, mapReadyState]);
 
@@ -1291,19 +1243,9 @@ export function TexasMap({
           /* layer ordering best-effort */
         }
 
-        // Hover popup naming the DM level. The DM number alone is
-        // unintelligible to first-time viewers — labeling it as
-        // "Severe", "Extreme", etc. makes the layer self-explaining.
+        // New interaction model: hover = preview, click = pinned popup
+        // with X close button + clickable USDM link.
         const ml = await import("maplibre-gl");
-        const popup = new ml.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 8,
-          className: "dryline-drought-popup",
-        });
-        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-          features?: import("maplibre-gl").MapGeoJSONFeature[];
-        };
         const DM_LABELS = [
           "D0 · Abnormally dry",
           "D1 · Moderate drought",
@@ -1311,38 +1253,30 @@ export function TexasMap({
           "D3 · Extreme drought",
           "D4 · Exceptional drought",
         ];
-        const persist = bindPopupHoverPersist(popup);
-        const onMove = (e: MoveEvt) => {
-          const f = e.features?.[0];
-          if (!f) return;
+        const droughtRender = (
+          f: import("maplibre-gl").MapGeoJSONFeature,
+          pinned: boolean,
+        ): string => {
           const dm = (f.properties as { DM?: number } | null)?.DM ?? 0;
           const label = DM_LABELS[Math.max(0, Math.min(4, dm))] ?? DM_LABELS[0];
           const color = DROUGHT_COLORS[Math.max(0, Math.min(4, dm))] ?? DROUGHT_COLORS[0];
-          map.getCanvas().style.cursor = "help";
-          persist.cancelClose();
-          popup
-            .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="padding:8px 11px;max-width:240px">
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
-                  <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78">U.S. Drought Monitor</span>
-                </div>
-                <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${label}</div>
-                <a href="https://droughtmonitor.unl.edu/CurrentMap/StateDroughtMonitor.aspx?TX" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USDM Texas map ↗</a>
-              </div>`,
-            )
-            .addTo(map);
-          persist.bindToElement();
+          return `<div style="padding:8px 11px;max-width:240px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+              <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78">U.S. Drought Monitor</span>
+            </div>
+            <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${label}</div>
+            ${pinned ? `<a href="https://droughtmonitor.unl.edu/CurrentMap/StateDroughtMonitor.aspx?TX" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USDM Texas map ↗</a>` : ""}
+          </div>`;
         };
-        const onLeave = () => {
-          map.getCanvas().style.cursor = "";
-          persist.scheduleClose();
-        };
-        map.on("mousemove", FILL, onMove);
-        map.on("mouseleave", FILL, onLeave);
-        const handlers = { onMove, onLeave, popup };
-        (map as MapInstance & { __droughtHandlers?: typeof handlers }).__droughtHandlers = handlers;
+        const ctl = setupLayerPopup(map, ml, {
+          layerId: FILL,
+          hoverEvent: "mousemove",
+          previewHtml: (f) => droughtRender(f, false),
+          pinnedHtml: (f) => droughtRender(f, true),
+          className: "dryline-drought-popup",
+        });
+        (map as MapInstance & { __droughtPopupCtl?: LayerPopupController }).__droughtPopupCtl = ctl;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] drought layer failed:", err);
@@ -1351,28 +1285,9 @@ export function TexasMap({
 
     return () => {
       cancelled = true;
-      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __droughtHandlers?: {
-            onMove: (e: MoveEvt) => void;
-            onLeave: () => void;
-            popup: PopupInstance;
-          };
-        }
-      ).__droughtHandlers;
-      if (handlers) {
-        try {
-          map.off("mousemove", FILL, handlers.onMove);
-          map.off("mouseleave", FILL, handlers.onLeave);
-          handlers.popup.remove();
-        } catch {
-          /* idempotent */
-        }
-        delete (map as MapInstance & { __droughtHandlers?: unknown }).__droughtHandlers;
-      }
+      const ctl = (map as MapInstance & { __droughtPopupCtl?: LayerPopupController }).__droughtPopupCtl;
+      ctl?.cleanup();
+      delete (map as MapInstance & { __droughtPopupCtl?: unknown }).__droughtPopupCtl;
       cleanup();
     };
   }, [layerState.drought, mapReadyState]);
@@ -1390,22 +1305,12 @@ export function TexasMap({
   // - Hover popup rebuilt from feature properties on the fly so it
   //   carries the rich sparkline + trend body.
   // - Click triggers the same investigation pipeline as a demo pin.
-  const reservoirHandlersRef = useRef<{
-    onClick?: (e: import("maplibre-gl").MapMouseEvent) => void;
-    onEnter?: (e: import("maplibre-gl").MapMouseEvent) => void;
-    onLeave?: () => void;
-    popup?: PopupInstance;
-  }>({});
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReadyState) return;
     const SRC = "dryline-reservoirs";
     const LAYER = "dryline-reservoirs-symbols";
     let cancelled = false;
-
-    type ResEvt = import("maplibre-gl").MapMouseEvent & {
-      features?: import("maplibre-gl").MapGeoJSONFeature[];
-    };
 
     (async () => {
       const ml = await import("maplibre-gl");
@@ -1507,18 +1412,8 @@ export function TexasMap({
         /* idempotent */
       }
 
-      // 6. Wire interactivity. Reuse one popup instance.
-      const popup =
-        reservoirHandlersRef.current.popup ??
-        new ml.Popup({
-          anchor: "bottom",
-          offset: 18,
-          closeButton: false,
-          closeOnClick: false,
-          className: "dryline-reservoir-popup",
-        });
-
-      const renderPopupHtml = (p: {
+      // 6. Wire interactivity using the new popup model.
+      type ResProps = {
         slug?: string;
         name?: string;
         tier?: string;
@@ -1527,7 +1422,8 @@ export function TexasMap({
         trend7d?: number | null;
         series?: string;
         lastUpdated?: string | null;
-      }) => {
+      };
+      const renderReservoirHtml = (p: ResProps, pinned: boolean) => {
         const tier = (p.tier ?? "nodata") as ReservoirTier;
         const fillForTier: Record<ReservoirTier, { fill: string; label: string }> = {
           nodata: { fill: "#4a6c78", label: "no data" },
@@ -1556,9 +1452,9 @@ export function TexasMap({
             t == null
               ? ""
               : `<span style="color:${t > 0 ? "#0d3b6f" : t < 0 ? "#a85a35" : "#4a6c78"}">${arrow} ${t > 0 ? "+" : ""}${t.toFixed(1)} pts / 7d</span>`;
-          const spark = sparklineSvg(series, hist, { w: 130, h: 28 });
+          const spark = pinned ? sparklineSvg(series, hist, { w: 130, h: 28 }) : "";
           const histLine =
-            hist != null
+            pinned && hist != null
               ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">Hist. avg for today: ${hist.toFixed(1)}%</div>`
               : "";
           body = `
@@ -1567,8 +1463,8 @@ export function TexasMap({
               <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78;padding-top:2px">${colors.label}</div>
             </div>
             ${histLine}
-            <div style="margin-top:6px">${spark}</div>
-            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px;display:flex;justify-content:space-between;gap:6px"><span>${trendLabel}</span><span>${p.lastUpdated ?? ""}</span></div>
+            ${pinned ? `<div style="margin-top:6px">${spark}</div>` : ""}
+            ${pinned ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:4px;display:flex;justify-content:space-between;gap:6px"><span>${trendLabel}</span><span>${p.lastUpdated ?? ""}</span></div>` : ""}
           `;
         } else {
           body = `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:2px">No live readings published.</div>`;
@@ -1576,70 +1472,62 @@ export function TexasMap({
         const twdbUrl = p.slug
           ? `https://www.waterdatafortexas.org/reservoirs/individual/${p.slug}`
           : null;
+        const footer = pinned
+          ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px;border-top:1px solid #c8d6da;padding-top:8px">
+              <button data-dryline-investigate style="cursor:pointer;background:#0d3b6f;color:#fff;border:none;padding:6px 10px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border-radius:2px">Investigate ↗</button>
+              ${twdbUrl ? `<a href="${twdbUrl}" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">TWDB page ↗</a>` : ""}
+            </div>`
+          : "";
         return `<div style="padding:10px 12px;min-width:220px">
           <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Reservoir</div>
           <div style="font-family:'Newsreader',serif;font-size:15px;color:#07171f;margin-top:2px;line-height:1.2">${p.name ?? "—"}</div>
           ${body}
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:8px;border-top:1px solid #c8d6da;padding-top:6px">
-            <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f">Click to investigate ↗</span>
-            ${twdbUrl ? `<a href="${twdbUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">TWDB page ↗</a>` : ""}
-          </div>
+          ${footer}
         </div>`;
       };
 
-      const persist = bindPopupHoverPersist(popup);
-      const onEnter = (e: ResEvt) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const g = f.geometry as unknown as { type?: string; coordinates?: [number, number] };
-        if (g.type !== "Point" || !g.coordinates) return;
-        const coords = g.coordinates;
-        const p = f.properties as Parameters<typeof renderPopupHtml>[0];
-        map.getCanvas().style.cursor = "pointer";
-        persist.cancelClose();
-        popup.setLngLat(coords).setHTML(renderPopupHtml(p)).addTo(map);
-        persist.bindToElement();
-      };
-      const onLeave = () => {
-        map.getCanvas().style.cursor = "";
-        persist.scheduleClose();
-      };
-      const onClick = (e: ResEvt) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const g = f.geometry as unknown as { type?: string; coordinates?: [number, number] };
-        if (g.type !== "Point" || !g.coordinates) return;
-        const coords = g.coordinates;
-        const p = f.properties as { slug?: string; name?: string };
-        if (!p.name) return;
-        const synth: MapLocation = {
-          id: `reservoir:${p.slug}`,
-          label: p.name,
-          city: p.name.replace(/\b(Lake|Reservoir)\b/gi, "").trim(),
-          county: "",
-          region: "TX reservoir",
-          mode: "transparency",
-          headlineStory: `Investigation centered on ${p.name}.`,
-          approxLatLng: { lat: coords[1], lng: coords[0] },
-          live: true,
-        };
-        onLocationClickRef.current?.(synth);
-      };
+      const prevCtl = (
+        map as MapInstance & { __reservoirPopupCtl?: LayerPopupController }
+      ).__reservoirPopupCtl;
+      prevCtl?.cleanup();
 
-      // Detach prior handlers (HMR) before reattaching.
-      const prev = reservoirHandlersRef.current;
-      if (prev.onClick) map.off("click", LAYER, prev.onClick);
-      if (prev.onEnter) map.off("mouseenter", LAYER, prev.onEnter);
-      if (prev.onLeave) map.off("mouseleave", LAYER, prev.onLeave);
-
-      map.on("click", LAYER, onClick);
-      map.on("mouseenter", LAYER, onEnter);
-      map.on("mouseleave", LAYER, onLeave);
-      reservoirHandlersRef.current = { onClick, onEnter, onLeave, popup };
+      const ctl = setupLayerPopup(map, ml, {
+        layerId: LAYER,
+        hoverEvent: "mouseenter",
+        previewHtml: (f) => renderReservoirHtml(f.properties as ResProps, false),
+        pinnedHtml: (f) => renderReservoirHtml(f.properties as ResProps, true),
+        className: "dryline-reservoir-popup",
+        onInvestigate: (f, lngLat) => {
+          const p = f.properties as { slug?: string; name?: string };
+          if (!p.name) return;
+          const synth: MapLocation = {
+            id: `reservoir:${p.slug}`,
+            label: p.name,
+            city: p.name.replace(/\b(Lake|Reservoir)\b/gi, "").trim(),
+            county: "",
+            region: "TX reservoir",
+            mode: "transparency",
+            headlineStory: `Investigation centered on ${p.name}.`,
+            approxLatLng: { lat: lngLat.lat, lng: lngLat.lng },
+            live: true,
+          };
+          onLocationClickRef.current?.(synth);
+        },
+      });
+      (map as MapInstance & { __reservoirPopupCtl?: LayerPopupController }).__reservoirPopupCtl = ctl;
     })();
 
     return () => {
       cancelled = true;
+      const m = mapRef.current;
+      if (!m) return;
+      const ctl = (
+        m as MapInstance & { __reservoirPopupCtl?: LayerPopupController }
+      ).__reservoirPopupCtl;
+      if (ctl) {
+        ctl.cleanup();
+        delete (m as MapInstance & { __reservoirPopupCtl?: unknown }).__reservoirPopupCtl;
+      }
     };
   }, [reservoirData, mapReadyState]);
 
@@ -1983,19 +1871,9 @@ export function TexasMap({
           };
           flowFrame = requestAnimationFrame(tick);
         }
-        // Hover-only river name label. We attach a popup via the line
-        // hit target rather than full symbol layer (no font glyph
-        // dependency on raster basemap).
+        // New interaction model — hover preview, click pin with X +
+        // Wikipedia link.
         const ml = await import("maplibre-gl");
-        const popup = new ml.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 8,
-          className: "dryline-river-popup",
-        });
-        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-          features?: import("maplibre-gl").MapGeoJSONFeature[];
-        };
         const escapeRiver = (s: string) =>
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
@@ -2005,39 +1883,30 @@ export function TexasMap({
             .replace(/\(TX\)/i, "(Texas)")
             .trim()
             .replace(/\s+/g, "_");
-        const persist = bindPopupHoverPersist(popup);
-        const onMove = (e: MoveEvt) => {
-          const f = e.features?.[0];
-          if (!f) return;
+        const riverRender = (
+          f: import("maplibre-gl").MapGeoJSONFeature,
+          pinned: boolean,
+        ): string => {
           const name =
             (f.properties as { name?: string; NAME?: string } | null)?.name ??
             (f.properties as { name?: string; NAME?: string } | null)?.NAME ??
             "River";
           const slug = wikipediaSlug(name);
-          map.getCanvas().style.cursor = "help";
-          persist.cancelClose();
-          popup
-            .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="padding:8px 11px;max-width:240px">
-                <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Major river</div>
-                <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escapeRiver(name)}</div>
-                <a href="https://en.wikipedia.org/wiki/${slug}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>
-              </div>`,
-            )
-            .addTo(map);
-          persist.bindToElement();
+          return `<div style="padding:8px 11px;max-width:240px">
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Major river</div>
+            <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escapeRiver(name)}</div>
+            ${pinned ? `<a href="https://en.wikipedia.org/wiki/${slug}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>` : ""}
+          </div>`;
         };
-        const onLeave = () => {
-          map.getCanvas().style.cursor = "";
-          persist.scheduleClose();
-        };
-        map.on("mousemove", LINE, onMove);
-        map.on("mouseleave", LINE, onLeave);
-        // Stash the handlers + flow frame id on the map instance so
-        // cleanup can detach them on layer toggle / dark mode flip.
-        const handlers = { onMove, onLeave, popup, flowFrame };
-        (map as MapInstance & { __riverHandlers?: typeof handlers }).__riverHandlers = handlers;
+        const ctl = setupLayerPopup(map, ml, {
+          layerId: LINE,
+          hoverEvent: "mousemove",
+          previewHtml: (f) => riverRender(f, false),
+          pinnedHtml: (f) => riverRender(f, true),
+          className: "dryline-river-popup",
+        });
+        (map as MapInstance & { __riverPopupCtl?: LayerPopupController; __riverFlowFrame?: number | null }).__riverPopupCtl = ctl;
+        (map as MapInstance & { __riverFlowFrame?: number | null }).__riverFlowFrame = flowFrame;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] rivers layer failed:", err);
@@ -2045,34 +1914,12 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
-      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __riverHandlers?: {
-            onMove: (e: MoveEvt) => void;
-            onLeave: () => void;
-            popup: PopupInstance;
-            flowFrame: number | null;
-          };
-        }
-      ).__riverHandlers;
-      if (handlers) {
-        try {
-          map.off("mousemove", LINE, handlers.onMove);
-          map.off("mouseleave", LINE, handlers.onLeave);
-          handlers.popup.remove();
-          if (handlers.flowFrame != null) cancelAnimationFrame(handlers.flowFrame);
-        } catch {
-          /* idempotent */
-        }
-        delete (
-          map as MapInstance & {
-            __riverHandlers?: unknown;
-          }
-        ).__riverHandlers;
-      }
+      const ctl = (map as MapInstance & { __riverPopupCtl?: LayerPopupController }).__riverPopupCtl;
+      ctl?.cleanup();
+      delete (map as MapInstance & { __riverPopupCtl?: unknown }).__riverPopupCtl;
+      const ff = (map as MapInstance & { __riverFlowFrame?: number | null }).__riverFlowFrame;
+      if (ff != null) cancelAnimationFrame(ff);
+      delete (map as MapInstance & { __riverFlowFrame?: unknown }).__riverFlowFrame;
       cleanup();
       try {
         if (map.getLayer(`${LINE}-flow`)) map.removeLayer(`${LINE}-flow`);
@@ -2224,17 +2071,8 @@ export function TexasMap({
           /* idempotent */
         }
 
-        // Click → popup with site name + current cfs + relative time.
+        // Hover preview, click to pin, INVESTIGATE button.
         const ml = await import("maplibre-gl");
-        const popup = new ml.Popup({
-          closeButton: true,
-          closeOnClick: true,
-          offset: 10,
-          className: "dryline-gauge-popup",
-        });
-        type ClickEvt = import("maplibre-gl").MapMouseEvent & {
-          features?: import("maplibre-gl").MapGeoJSONFeature[];
-        };
         const escape = (s: string) =>
           s.replace(/[&<>"']/g, (c) =>
             c === "&"
@@ -2259,29 +2097,46 @@ export function TexasMap({
           const days = Math.round(hrs / 24);
           return `${days} d ago`;
         };
-        const onClick = (e: ClickEvt) => {
-          const f = e.features?.[0];
-          if (!f) return;
-          const p = f.properties as {
-            siteName?: string;
-            siteCode?: string;
-            cfs?: number | null;
-            ts?: string | null;
-          };
-          // Treat the click as an investigation trigger on the gauge's
-          // location. The popup still appears briefly via map.on('click')
-          // but the right-panel investigation is the primary action.
-          const lat = (e.lngLat as { lat?: number }).lat;
-          const lng = (e.lngLat as { lng?: number }).lng;
-          if (typeof lat === "number" && typeof lng === "number" && p.siteName) {
+        type GaugeProps = {
+          siteName?: string;
+          siteCode?: string;
+          cfs?: number | null;
+          ts?: string | null;
+        };
+        const renderGaugeHtml = (p: GaugeProps, pinned: boolean): string => {
+          const cfsText =
+            p.cfs == null
+              ? "<span style=\"color:#b13a1f\">no current reading</span>"
+              : `<span style=\"font-family:'Geist Mono',monospace;font-size:14px;color:#0d3b6f\">${p.cfs.toLocaleString()} cfs</span>`;
+          const usgsUrl = p.siteCode
+            ? `https://waterdata.usgs.gov/nwis/uv?site_no=${escape(p.siteCode)}`
+            : null;
+          return `<div style="padding:8px 12px;max-width:260px">
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">USGS gauge · ${escape(p.siteCode ?? "—")}</div>
+            <div style="font-family:'Newsreader',serif;font-size:13.5px;color:#07171f;line-height:1.25;margin-top:3px">${escape(p.siteName ?? "Unknown site")}</div>
+            <div style="margin-top:6px">${cfsText}</div>
+            ${pinned ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.12em;color:#4a6c78;margin-top:4px">${escape(relativeTime(p.ts ?? null))}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;border-top:1px solid #c8d6da;padding-top:8px">
+              <button data-dryline-investigate style="cursor:pointer;background:#0d3b6f;color:#fff;border:none;padding:6px 10px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border-radius:2px">Investigate ↗</button>
+              ${usgsUrl ? `<a href="${usgsUrl}" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">USGS NWIS ↗</a>` : ""}
+            </div>` : ""}
+          </div>`;
+        };
+        const ctl = setupLayerPopup(map, ml, {
+          layerId: CIRCLES,
+          hoverEvent: "mouseenter",
+          previewHtml: (f) => renderGaugeHtml(f.properties as GaugeProps, false),
+          pinnedHtml: (f) => renderGaugeHtml(f.properties as GaugeProps, true),
+          className: "dryline-gauge-popup",
+          onInvestigate: (f, lngLat) => {
+            const p = f.properties as GaugeProps;
+            if (!p.siteName) return;
             // USGS site names follow patterns like "Colorado Rv at Austin, TX"
-            // or "Trinity Rv at IH 10 nr Wallisville, TX". The leading
-            // watercourse description isn't geocodable. Extract the
-            // last "<City>, TX" fragment — Nominatim handles that.
+            // — extract the trailing "<City>, TX" fragment for Nominatim.
             const cityMatch = p.siteName.match(/([A-Z][a-zA-Z. -]+),\s*TX$/);
             const cityToken = cityMatch?.[1]?.trim() ?? "Texas";
             const synth: MapLocation = {
-              id: `gauge:${p.siteCode ?? `${lat},${lng}`}`,
+              id: `gauge:${p.siteCode ?? `${lngLat.lat},${lngLat.lng}`}`,
               label: p.siteName,
               city: cityToken,
               county: "",
@@ -2291,41 +2146,13 @@ export function TexasMap({
                 p.cfs != null
                   ? `Investigation centered on USGS gauge ${p.siteCode}: ${p.cfs.toLocaleString()} cfs currently.`
                   : `Investigation centered on USGS gauge ${p.siteCode}.`,
-              approxLatLng: { lat, lng },
+              approxLatLng: { lat: lngLat.lat, lng: lngLat.lng },
               live: true,
             };
             onLocationClickRef.current?.(synth);
-          }
-          const cfsText =
-            p.cfs == null
-              ? "<span style=\"color:#b13a1f\">no current reading</span>"
-              : `<span style=\"font-family:'Geist Mono',monospace;font-size:14px;color:#0d3b6f\">${p.cfs.toLocaleString()} cfs</span>`;
-          const usgsUrl = p.siteCode
-            ? `https://waterdata.usgs.gov/nwis/uv?site_no=${escape(p.siteCode)}`
-            : null;
-          const html = `<div style="padding:8px 12px;max-width:260px">
-            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">USGS gauge · ${escape(p.siteCode ?? "—")}</div>
-            <div style="font-family:'Newsreader',serif;font-size:13.5px;color:#07171f;line-height:1.25;margin-top:3px">${escape(p.siteName ?? "Unknown site")}</div>
-            <div style="margin-top:6px">${cfsText}</div>
-            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.12em;color:#4a6c78;margin-top:4px">${escape(relativeTime(p.ts ?? null))}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;border-top:1px solid #c8d6da;padding-top:4px">
-              <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f">Investigating ↗</span>
-              ${usgsUrl ? `<a href="${usgsUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">USGS NWIS ↗</a>` : ""}
-            </div>
-          </div>`;
-          popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
-        };
-        const onEnter = () => {
-          map.getCanvas().style.cursor = "pointer";
-        };
-        const onLeaveCircles = () => {
-          map.getCanvas().style.cursor = "";
-        };
-        map.on("click", CIRCLES, onClick);
-        map.on("mouseenter", CIRCLES, onEnter);
-        map.on("mouseleave", CIRCLES, onLeaveCircles);
-        const handlers = { onClick, onEnter, onLeaveCircles, popup };
-        (map as MapInstance & { __gaugeHandlers?: typeof handlers }).__gaugeHandlers = handlers;
+          },
+        });
+        (map as MapInstance & { __gaugePopupCtl?: LayerPopupController }).__gaugePopupCtl = ctl;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] gauges layer failed:", err);
@@ -2333,33 +2160,12 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
-      type ClickEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __gaugeHandlers?: {
-            onClick: (e: ClickEvt) => void;
-            onEnter: () => void;
-            onLeaveCircles: () => void;
-            popup: PopupInstance;
-          };
-        }
-      ).__gaugeHandlers;
-      if (handlers) {
-        try {
-          map.off("click", CIRCLES, handlers.onClick);
-          map.off("mouseenter", CIRCLES, handlers.onEnter);
-          map.off("mouseleave", CIRCLES, handlers.onLeaveCircles);
-          handlers.popup.remove();
-        } catch {
-          /* idempotent */
-        }
-        delete (
-          map as MapInstance & {
-            __gaugeHandlers?: unknown;
-          }
-        ).__gaugeHandlers;
+      const ctl = (
+        map as MapInstance & { __gaugePopupCtl?: LayerPopupController }
+      ).__gaugePopupCtl;
+      if (ctl) {
+        ctl.cleanup();
+        delete (map as MapInstance & { __gaugePopupCtl?: unknown }).__gaugePopupCtl;
       }
       cleanup();
     };
@@ -2444,23 +2250,12 @@ export function TexasMap({
           /* idempotent */
         }
 
-        // Hover popup naming the aquifer.
+        // New interaction model.
         const ml = await import("maplibre-gl");
-        const popup = new ml.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 8,
-          className: "dryline-aquifer-popup",
-        });
-        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-          features?: import("maplibre-gl").MapGeoJSONFeature[];
-        };
         const escape = (s: string) =>
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
           );
-        const persist = bindPopupHoverPersist(popup);
-        // Wikipedia slug per major TX aquifer — these articles exist.
         const aquiferWikiSlug: Record<string, string> = {
           OGALLALA: "Ogallala_Aquifer",
           "EDWARDS-TRINITY": "Edwards%E2%80%93Trinity_Aquifer",
@@ -2472,9 +2267,10 @@ export function TexasMap({
           SEYMOUR: "Seymour_Aquifer",
           "HUECO_BOLSON": "Hueco_Bolson",
         };
-        const onMove = (e: MoveEvt) => {
-          const f = e.features?.[0];
-          if (!f) return;
+        const aquiferRender = (
+          f: import("maplibre-gl").MapGeoJSONFeature,
+          pinned: boolean,
+        ): string => {
           const raw = (f.properties as { AQ_NAME?: string } | null)?.AQ_NAME ?? "Aquifer";
           const label = AQUIFER_LABELS[raw] ?? raw;
           const color = AQUIFER_COLORS[raw] ?? "#9a8a6e";
@@ -2486,34 +2282,30 @@ export function TexasMap({
                 <div style="font-family:'Newsreader',serif;font-size:12.5px;color:#07171f;line-height:1.25;margin-top:1px">${escape(fact.extent)}</div>
                 <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78;margin-top:6px">Status</div>
                 <div style="font-family:'Newsreader',serif;font-size:12.5px;color:${color};font-weight:500;line-height:1.25;margin-top:1px">${escape(fact.status)}</div>
-                <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12px;color:#4a6c78;line-height:1.4;margin-top:6px">${escape(fact.story)}</div>
+                ${pinned ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12px;color:#4a6c78;line-height:1.4;margin-top:6px">${escape(fact.story)}</div>` : ""}
               </div>`
             : "";
-          const linkBody = wikiSlug
+          const linkBody = pinned && wikiSlug
             ? `<a href="https://en.wikipedia.org/wiki/${wikiSlug}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>`
             : "";
-          persist.cancelClose();
-          popup
-            .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="padding:8px 11px;max-width:260px">
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="width:10px;height:10px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
-                  <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Aquifer</span>
-                </div>
-                <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escape(label)}</div>
-                ${factBody}
-                ${linkBody}
-              </div>`,
-            )
-            .addTo(map);
-          persist.bindToElement();
+          return `<div style="padding:8px 11px;max-width:260px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:10px;height:10px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+              <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Aquifer</span>
+            </div>
+            <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">${escape(label)}</div>
+            ${factBody}
+            ${linkBody}
+          </div>`;
         };
-        const onLeave = () => persist.scheduleClose();
-        map.on("mousemove", FILL, onMove);
-        map.on("mouseleave", FILL, onLeave);
-        const handlers = { onMove, onLeave, popup };
-        (map as MapInstance & { __aquiferHandlers?: typeof handlers }).__aquiferHandlers = handlers;
+        const ctl = setupLayerPopup(map, ml, {
+          layerId: FILL,
+          hoverEvent: "mousemove",
+          previewHtml: (f) => aquiferRender(f, false),
+          pinnedHtml: (f) => aquiferRender(f, true),
+          className: "dryline-aquifer-popup",
+        });
+        (map as MapInstance & { __aquiferPopupCtl?: LayerPopupController }).__aquiferPopupCtl = ctl;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] aquifer layer failed:", err);
@@ -2521,28 +2313,9 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
-      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __aquiferHandlers?: {
-            onMove: (e: MoveEvt) => void;
-            onLeave: () => void;
-            popup: PopupInstance;
-          };
-        }
-      ).__aquiferHandlers;
-      if (handlers) {
-        try {
-          map.off("mousemove", FILL, handlers.onMove);
-          map.off("mouseleave", FILL, handlers.onLeave);
-          handlers.popup.remove();
-        } catch {
-          /* idempotent */
-        }
-        delete (map as MapInstance & { __aquiferHandlers?: unknown }).__aquiferHandlers;
-      }
+      const ctl = (map as MapInstance & { __aquiferPopupCtl?: LayerPopupController }).__aquiferPopupCtl;
+      ctl?.cleanup();
+      delete (map as MapInstance & { __aquiferPopupCtl?: unknown }).__aquiferPopupCtl;
       cleanup();
     };
   }, [layerState.aquifers, mapReadyState, dark]);
@@ -2620,49 +2393,33 @@ export function TexasMap({
           }
         } catch { /* idempotent */ }
 
-        // Hover popup naming the basin.
+        // New interaction model.
         const ml = await import("maplibre-gl");
-        const popup = new ml.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 8,
-          className: "dryline-basin-popup",
-        });
-        type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-          features?: import("maplibre-gl").MapGeoJSONFeature[];
-        };
         const escape = (s: string) =>
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
           );
-        const persist = bindPopupHoverPersist(popup);
-        const onMove = (e: MoveEvt) => {
-          const f = e.features?.[0];
-          if (!f) return;
+        const basinRender = (
+          f: import("maplibre-gl").MapGeoJSONFeature,
+          pinned: boolean,
+        ): string => {
           const p = f.properties as { name?: string; huc4?: string; states?: string };
-          map.getCanvas().style.cursor = "help";
-          const wbdUrl = p.huc4
-            ? `https://water.usgs.gov/wsc/cat/${p.huc4}.html`
-            : null;
-          persist.cancelClose();
-          popup
-            .setLngLat(e.lngLat)
-            .setHTML(`<div style="padding:8px 11px;max-width:260px">
-              <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">River basin · HUC ${escape(p.huc4 ?? "—")}</div>
-              <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.name ?? "—")}</div>
-              ${p.states ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:3px">States: ${escape(p.states)}</div>` : ""}
-              ${wbdUrl ? `<a href="${wbdUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USGS WBD ↗</a>` : ""}
-            </div>`)
-            .addTo(map);
-          persist.bindToElement();
+          const wbdUrl = p.huc4 ? `https://water.usgs.gov/wsc/cat/${p.huc4}.html` : null;
+          return `<div style="padding:8px 11px;max-width:260px">
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">River basin · HUC ${escape(p.huc4 ?? "—")}</div>
+            <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.name ?? "—")}</div>
+            ${p.states ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:3px">States: ${escape(p.states)}</div>` : ""}
+            ${pinned && wbdUrl ? `<a href="${wbdUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USGS WBD ↗</a>` : ""}
+          </div>`;
         };
-        const onLeave = () => {
-          map.getCanvas().style.cursor = "";
-          persist.scheduleClose();
-        };
-        map.on("mousemove", FILL, onMove);
-        map.on("mouseleave", FILL, onLeave);
-        (map as MapInstance & { __basinHandlers?: { onMove: typeof onMove; onLeave: typeof onLeave; popup: PopupInstance } }).__basinHandlers = { onMove, onLeave, popup };
+        const ctl = setupLayerPopup(map, ml, {
+          layerId: FILL,
+          hoverEvent: "mousemove",
+          previewHtml: (f) => basinRender(f, false),
+          pinnedHtml: (f) => basinRender(f, true),
+          className: "dryline-basin-popup",
+        });
+        (map as MapInstance & { __basinPopupCtl?: LayerPopupController }).__basinPopupCtl = ctl;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] basins failed:", err);
@@ -2670,22 +2427,9 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
-      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __basinHandlers?: { onMove: (e: MoveEvt) => void; onLeave: () => void; popup: PopupInstance };
-        }
-      ).__basinHandlers;
-      if (handlers) {
-        try {
-          map.off("mousemove", FILL, handlers.onMove);
-          map.off("mouseleave", FILL, handlers.onLeave);
-          handlers.popup.remove();
-        } catch { /* idempotent */ }
-        delete (map as MapInstance & { __basinHandlers?: unknown }).__basinHandlers;
-      }
+      const ctl = (map as MapInstance & { __basinPopupCtl?: LayerPopupController }).__basinPopupCtl;
+      ctl?.cleanup();
+      delete (map as MapInstance & { __basinPopupCtl?: unknown }).__basinPopupCtl;
       cleanup();
     };
   }, [layerState.basins, mapReadyState]);
@@ -2750,40 +2494,22 @@ export function TexasMap({
           }
         } catch { /* idempotent */ }
 
-        // Hover popup explains what the corridor is + links out for
-        // depth. Most viewers won't know what a "dryline" is at a glance.
+        // New interaction model.
         const ml = await import("maplibre-gl");
-        const drylinePopup = new ml.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 8,
+        const drylineRender = (_f: import("maplibre-gl").MapGeoJSONFeature, pinned: boolean): string => `
+          <div style="padding:8px 11px;max-width:280px">
+            <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Climate · West Texas</div>
+            <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">Dryline corridor</div>
+            ${pinned ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;line-height:1.4;margin-top:6px">A meteorological boundary where dry continental air meets moist Gulf air. The engine of West Texas severe weather. This band shows where it most often sets up — today's exact line varies.</div><a href="https://en.wikipedia.org/wiki/Dryline" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>` : ""}
+          </div>`;
+        const ctl = setupLayerPopup(map, ml, {
+          layerId: FILL,
+          hoverEvent: "mousemove",
+          previewHtml: (f) => drylineRender(f, false),
+          pinnedHtml: (f) => drylineRender(f, true),
           className: "dryline-corridor-popup",
         });
-        type DryEvt = import("maplibre-gl").MapMouseEvent & {
-          features?: import("maplibre-gl").MapGeoJSONFeature[];
-        };
-        const persistDryline = bindPopupHoverPersist(drylinePopup);
-        const onDryMove = (e: DryEvt) => {
-          map.getCanvas().style.cursor = "help";
-          persistDryline.cancelClose();
-          drylinePopup
-            .setLngLat(e.lngLat)
-            .setHTML(`<div style="padding:8px 11px;max-width:280px">
-              <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">Climate · West Texas</div>
-              <div style="font-family:'Newsreader',serif;font-size:14.5px;color:#07171f;margin-top:2px;line-height:1.2">Dryline corridor</div>
-              <div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;line-height:1.4;margin-top:6px">A meteorological boundary where dry continental air meets moist Gulf air. The engine of West Texas severe weather. This band shows where it most often sets up — today's exact line varies.</div>
-              <a href="https://en.wikipedia.org/wiki/Dryline" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>
-            </div>`)
-            .addTo(map);
-          persistDryline.bindToElement();
-        };
-        const onDryLeave = () => {
-          map.getCanvas().style.cursor = "";
-          persistDryline.scheduleClose();
-        };
-        map.on("mousemove", FILL, onDryMove);
-        map.on("mouseleave", FILL, onDryLeave);
-        (map as MapInstance & { __drylineHandlers?: { onMove: typeof onDryMove; onLeave: typeof onDryLeave; popup: PopupInstance } }).__drylineHandlers = { onMove: onDryMove, onLeave: onDryLeave, popup: drylinePopup };
+        (map as MapInstance & { __drylineCorridorPopupCtl?: LayerPopupController }).__drylineCorridorPopupCtl = ctl;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] dryline corridor failed:", err);
@@ -2791,21 +2517,13 @@ export function TexasMap({
     })();
     return () => {
       cancelled = true;
-      type DryEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __drylineHandlers?: { onMove: (e: DryEvt) => void; onLeave: () => void; popup: PopupInstance };
-        }
-      ).__drylineHandlers;
-      if (handlers) {
-        try {
-          map.off("mousemove", FILL, handlers.onMove);
-          map.off("mouseleave", FILL, handlers.onLeave);
-          handlers.popup.remove();
-        } catch { /* idempotent */ }
-        delete (map as MapInstance & { __drylineHandlers?: unknown }).__drylineHandlers;
+      const ctl = (
+        map as MapInstance & { __drylineCorridorPopupCtl?: LayerPopupController }
+      ).__drylineCorridorPopupCtl;
+      if (ctl) {
+        ctl.cleanup();
+        delete (map as MapInstance & { __drylineCorridorPopupCtl?: unknown })
+          .__drylineCorridorPopupCtl;
       }
       cleanup();
     };
@@ -2955,17 +2673,8 @@ export function TexasMap({
             }
           } catch { /* idempotent */ }
 
-          // Hover popup
+          // New interaction model: hover preview, click to pin.
           const ml = await import("maplibre-gl");
-          const popup = new ml.Popup({
-            closeButton: false,
-            closeOnClick: false,
-            offset: 8,
-            className: "dryline-alert-popup",
-          });
-          type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-            features?: import("maplibre-gl").MapGeoJSONFeature[];
-          };
           const escape = (s: string) =>
             s.replace(/[&<>"']/g, (c) =>
               c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
@@ -2982,7 +2691,6 @@ export function TexasMap({
               timeZoneName: "short",
             });
           };
-          const persist = bindPopupHoverPersist(popup);
           // Map event name → Wikipedia slug so the user can read about
           // the alert type. Falls back to the generic NWS warnings page.
           const eventSlug = (event: string | undefined): string => {
@@ -3000,9 +2708,7 @@ export function TexasMap({
             if (e.includes("winter")) return "Winter_storm_warning";
             return "Severe_weather_terminology_(United_States)";
           };
-          const onMove = (e: MoveEvt) => {
-            const f = e.features?.[0];
-            if (!f) return;
+          const alertRender = (f: import("maplibre-gl").MapGeoJSONFeature, pinned: boolean): string => {
             const p = f.properties as {
               event?: string;
               bucket?: string;
@@ -3015,37 +2721,28 @@ export function TexasMap({
                 ? palette[p.bucket as AlertBucket]
                 : palette.other;
             const slug = eventSlug(p.event);
-            map.getCanvas().style.cursor = "help";
-            persist.cancelClose();
-            popup
-              .setLngLat(e.lngLat)
-              .setHTML(`<div style="padding:8px 11px;max-width:280px">
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
-                  <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">NWS active alert</span>
-                </div>
-                <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.event ?? "Alert")}</div>
-                ${p.areaDesc ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:4px;line-height:1.4">${escape(p.areaDesc)}</div>` : ""}
-                ${p.expires ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:6px">Expires ${escape(fmtExp(p.expires))}</div>` : ""}
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
-                  <a href="https://en.wikipedia.org/wiki/${slug}" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Alert type ↗</a>
-                  <a href="https://www.weather.gov/alerts/" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">weather.gov ↗</a>
-                </div>
-              </div>`)
-              .addTo(map);
-            persist.bindToElement();
+            return `<div style="padding:8px 11px;max-width:280px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="width:9px;height:9px;display:inline-block;background:${color};border:1px solid rgba(7,23,31,0.25)"></span>
+                <span style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">NWS active alert</span>
+              </div>
+              <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.event ?? "Alert")}</div>
+              ${pinned && p.areaDesc ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12.5px;color:#4a6c78;margin-top:4px;line-height:1.4">${escape(p.areaDesc)}</div>` : ""}
+              ${pinned && p.expires ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:6px">Expires ${escape(fmtExp(p.expires))}</div>` : ""}
+              ${pinned ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px">
+                <a href="https://en.wikipedia.org/wiki/${slug}" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Alert type ↗</a>
+                <a href="https://www.weather.gov/alerts/" target="_blank" rel="noopener noreferrer" style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a6c78;text-decoration:underline;text-underline-offset:2px">weather.gov ↗</a>
+              </div>` : ""}
+            </div>`;
           };
-          const onLeave = () => {
-            map.getCanvas().style.cursor = "";
-            persist.scheduleClose();
-          };
-          map.on("mousemove", FILL, onMove);
-          map.on("mouseleave", FILL, onLeave);
-          (map as MapInstance & { __alertHandlers?: { onMove: typeof onMove; onLeave: typeof onLeave; popup: PopupInstance } }).__alertHandlers = {
-            onMove,
-            onLeave,
-            popup,
-          };
+          const ctl = setupLayerPopup(map, ml, {
+            layerId: FILL,
+            hoverEvent: "mousemove",
+            previewHtml: (f) => alertRender(f, false),
+            pinnedHtml: (f) => alertRender(f, true),
+            className: "dryline-alert-popup",
+          });
+          (map as MapInstance & { __alertPopupCtl?: LayerPopupController }).__alertPopupCtl = ctl;
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -3058,21 +2755,12 @@ export function TexasMap({
     return () => {
       cancelled = true;
       if (pollTimer) clearInterval(pollTimer);
-      type MoveEvt = import("maplibre-gl").MapMouseEvent & {
-        features?: import("maplibre-gl").MapGeoJSONFeature[];
-      };
-      const handlers = (
-        map as MapInstance & {
-          __alertHandlers?: { onMove: (e: MoveEvt) => void; onLeave: () => void; popup: PopupInstance };
-        }
-      ).__alertHandlers;
-      if (handlers) {
-        try {
-          map.off("mousemove", FILL, handlers.onMove);
-          map.off("mouseleave", FILL, handlers.onLeave);
-          handlers.popup.remove();
-        } catch { /* idempotent */ }
-        delete (map as MapInstance & { __alertHandlers?: unknown }).__alertHandlers;
+      const ctl = (
+        map as MapInstance & { __alertPopupCtl?: LayerPopupController }
+      ).__alertPopupCtl;
+      if (ctl) {
+        ctl.cleanup();
+        delete (map as MapInstance & { __alertPopupCtl?: unknown }).__alertPopupCtl;
       }
       cleanup();
     };

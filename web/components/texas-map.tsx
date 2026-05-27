@@ -299,7 +299,7 @@ const DROUGHT_COLORS = ["#cdd9b4", "#cfb27a", "#a85a35", "#6f1d10", "#4a0d05"];
 // DM 0=D0(abnormal), 1=D1(moderate), 2=D2(severe), 3=D3(extreme), 4=D4(exceptional)
 
 const LAYER_SPECS: LayerSpec[] = [
-  { key: "samples", label: "Sample addresses", swatch: "#0d3b6f", hint: "The seven curated demo addresses (Wimberley, Taylor/Samsung, Fort Stockton, Houston, Lubbock, El Paso, San Antonio)." },
+  { key: "samples", label: "Sample addresses", swatch: "#0d3b6f", hint: "Seven sample Texas addresses spanning Hill Country, the I-35 corridor, Trans-Pecos, the Coast, the Panhandle, Far West Texas, and the Edwards recharge zone." },
   { key: "drought", label: "Drought (USDM)", swatch: "#a85a35", hint: "Current week's U.S. Drought Monitor polygons, clipped to Texas." },
   { key: "rivers", label: "Major rivers", swatch: "#0d3b6f", hint: "Twelve TX river main stems (simplified centerlines)." },
   { key: "reservoirs", label: "Reservoirs", swatch: "#4a8aa8", hint: "Major TWDB-instrumented reservoirs with live % full + 7-day trend." },

@@ -122,8 +122,8 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           <div>
             <div className="dryline-label mb-2">How to read this surface</div>
             <ul className="grid grid-cols-1 gap-1.5 text-[13.5px] font-serif text-ink/85 leading-snug">
-              <li><strong className="font-semibold">The map</strong> shows the current US Drought Monitor polygon under everything, the 18 major TWDB-instrumented reservoirs as tide-blue dots, and the seven demo addresses colored by mode.</li>
-              <li><strong className="font-semibold">Click any pin or any demo card</strong> to start an investigation. The map flies to the address and a 15-mile industrial-search radius drops as a translucent disk.</li>
+              <li><strong className="font-semibold">The map</strong> shows the current US Drought Monitor polygon under everything, the major TWDB-instrumented reservoirs as drought-colored lake glyphs, USGS stream gauges as ring markers, and seven sample addresses colored by mode (homeowner / watchdog).</li>
+              <li><strong className="font-semibold">Click any pin or any sample card</strong> to start an investigation. The map flies to the address and a 15-mile industrial-search radius drops as a translucent disk.</li>
               <li><strong className="font-semibold">The right panel reads top-to-bottom:</strong> Dryline Score → cited synthesis → action card → reasoning trace. The headline answer is on top; the trace is supporting evidence below.</li>
               <li><strong className="font-semibold">The Dryline Score</strong> is reductive on purpose. Hover &ldquo;Why this number?&rdquo; for the per-subscore rationale.</li>
               <li><strong className="font-semibold">The reasoning trace</strong> streams every tool call as it lands. Citation chips link to the actual public source URL with a retrieval timestamp.</li>

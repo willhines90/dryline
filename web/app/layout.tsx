@@ -1,26 +1,16 @@
 import type { Metadata } from "next";
-import { Newsreader, Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Newsreader, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-// Per the Claude Design bundle: Newsreader (editorial serif) + Geist (sans)
-// + Geist Mono (data / trace). Loaded once at the layout level and exposed
-// via CSS variables so Tailwind utilities can reach them.
-//
-// Plus Fraunces — display serif used for the brand wordmark in the
-// header. Variable, high-contrast strokes, more personality than
-// Newsreader for a logotype.
+// Newsreader (editorial serif) + Geist (sans) + Geist Mono (data / trace).
+// Loaded once at the layout level and exposed via CSS variables so
+// Tailwind utilities can reach them. The brand wordmark uses Geist
+// at 600 — clean modern sans, no display-serif theatrics.
 const newsreader = Newsreader({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   style: ["normal", "italic"],
   variable: "--font-newsreader",
-  display: "swap",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  axes: ["opsz", "SOFT"],
-  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -97,7 +87,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${newsreader.variable} ${geist.variable} ${geistMono.variable} ${fraunces.variable}`}
+      className={`${newsreader.variable} ${geist.variable} ${geistMono.variable}`}
     >
       <body className="font-sans">{children}</body>
     </html>

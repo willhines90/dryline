@@ -104,6 +104,56 @@
   .dryline-map .maplibregl-popup-tip {
     border-top-color: hsl(var(--card));
   }
+
+  /* Default MapLibre × is a 16px text glyph in the corner — invisible at
+     a glance and a hit-target nightmare. For pinned popups we replace
+     it with a real 28px button sitting *outside* the top-right corner,
+     so it never overlaps the popup's content. */
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 999px;
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 2px 6px rgb(7 23 31 / 0.18);
+    font-size: 0;          /* hide the default "×" text so we can draw our own */
+    line-height: 0;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    z-index: 2;
+  }
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button::before,
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 1.5px;
+    background-color: currentColor;
+    transform-origin: center;
+  }
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button:hover {
+    background-color: #6f1d10;
+    color: #fff;
+    border-color: #6f1d10;
+    transform: scale(1.06);
+  }
+  .dryline-map .maplibregl-popup.dryline-pinned-popup .maplibregl-popup-close-button:focus-visible {
+    outline: 2px solid #0d3b6f;
+    outline-offset: 2px;
+  }
 }
 
 @keyframes dryline-pulse {

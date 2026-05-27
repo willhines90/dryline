@@ -87,33 +87,41 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
           boxShadow: "0 1px 0 #0d3b6f, 0 6px 16px -8px rgba(7, 23, 31, 0.18)",
         }}
       >
-        <div className="px-4 py-3 flex items-center gap-3 min-w-0">
-          {/* Brand block — collapses tagline first as width shrinks. */}
+        <div className="relative px-4 py-3 flex items-center gap-3 min-w-0">
+          {/* Brand block (left). The search is absolutely centered in the
+              header rather than flex-centered between brand and actions —
+              that way the wordmark can grow/shrink without nudging the
+              search off-axis. */}
           <Link href="/" className="flex items-center gap-2.5 no-underline shrink-0 group" aria-label="Dryline — home">
             <DrylineLogo size={30} variant="front" />
             <span
-              className="text-[26px] tracking-[-0.018em] text-ink leading-none"
-              style={{ fontFamily: "var(--font-fraunces), 'Newsreader', Georgia, serif", fontWeight: 700, fontVariationSettings: "'opsz' 96" }}
+              className="font-sans text-[22px] font-semibold tracking-[-0.025em] text-ink leading-none"
             >
               Dryline
             </span>
-          </Link>
-          <span
-            aria-hidden
-            className="hidden xl:inline-block h-5 w-px bg-ink/15 shrink-0"
-          />
-          <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline truncate min-w-0 max-w-[320px]">
-            Where Texas weather meets Texas water — at any address.
-          </span>
-          {/* Search takes the available middle space; everything else is shrink-0. */}
-          <div className="flex-1 min-w-0 flex justify-center px-2">
-            <SearchBar
-              staged={locations}
-              onPick={handlePick}
-              activeLabel={primary.location?.label ?? null}
-              className="w-full max-w-[420px]"
+            <span
+              aria-hidden
+              className="hidden xl:inline-block h-5 w-px bg-ink/15 ml-1.5"
             />
+            <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline ml-2.5 truncate max-w-[320px]">
+              Follow the water at any Texas address — every claim cited.
+            </span>
+          </Link>
+          {/* Centered search — absolute-positioned so brand/actions can't
+              push it off-center. Max-width keeps it from butting into
+              either side at common viewport widths. */}
+          <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-[420px] px-2 pointer-events-none">
+            <div className="pointer-events-auto">
+              <SearchBar
+                staged={locations}
+                onPick={handlePick}
+                activeLabel={primary.location?.label ?? null}
+                className="w-full"
+              />
+            </div>
           </div>
+          {/* Spacer that pushes the actions group to the far right. */}
+          <div className="flex-1 min-w-0" />
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"

@@ -112,7 +112,14 @@ interface LayerControlProps {
 }
 
 export function LayerControl({ specs, state, onToggle, onSetMany, className, dark }: LayerControlProps) {
+  // Default open on desktop, collapsed-to-chip on mobile. Resolved on
+  // mount because window isn't available during SSR.
   const [open, setOpen] = React.useState(true);
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setOpen(false);
+    }
+  }, []);
   // Preserve the order specs are declared in within each group.
   const byGroup = React.useMemo(() => {
     const groups: LayerGroup[] = ["hydrology", "climate", "reference"];

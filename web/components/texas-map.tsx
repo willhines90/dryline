@@ -2837,7 +2837,7 @@ export function TexasMap({
         onToggle={toggleLayer}
         onSetMany={setManyLayers}
         dark={dark}
-        className="pointer-events-auto absolute right-4 bottom-4 w-[230px]"
+        className="pointer-events-auto absolute right-2 bottom-2 lg:right-4 lg:bottom-4 w-[170px] lg:w-[230px]"
       />
 
       {mountError ? (
@@ -2865,6 +2865,12 @@ function MapLegend({ dark }: { dark: boolean }) {
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw === "0") setOpen(false);
+      else if (raw === "1") setOpen(true);
+      else if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        // First-time mobile visitor: collapse to a chip so the map stays
+        // unobstructed. They can tap to expand.
+        setOpen(false);
+      }
     } catch {
       /* ignore */
     }
@@ -2883,7 +2889,7 @@ function MapLegend({ dark }: { dark: boolean }) {
   return (
     <div
       className={cn(
-        "pointer-events-auto absolute left-4 bottom-4 w-[240px]",
+        "pointer-events-auto absolute left-2 bottom-2 lg:left-4 lg:bottom-4 w-[170px] lg:w-[240px]",
         "border backdrop-blur-sm shadow-paper",
         dark
           ? "border-aquifer/50 bg-[rgba(8,14,22,0.85)] text-spring"

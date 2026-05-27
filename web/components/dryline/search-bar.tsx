@@ -284,15 +284,16 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
   const display = open ? q : activeLabel ?? q;
 
   return (
-    <div ref={wrapRef} className={cn("relative w-full max-w-[360px]", className)}>
+    <div ref={wrapRef} className={cn("relative w-full", className)}>
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-1.5 bg-card transition-colors",
+          // Larger tap target on mobile (44px), tighter on desktop.
+          "flex items-center gap-2 px-3 py-2.5 lg:py-1.5 bg-card transition-colors",
           "border",
           open ? "border-ink" : "border-rule",
         )}
       >
-        <span className="font-mono text-[11px] text-tideline">⌕</span>
+        <span className="font-mono text-[13px] lg:text-[11px] text-tideline">⌕</span>
         <input
           ref={inputRef}
           value={display}
@@ -303,9 +304,11 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder="Search any Texas address…"
-          className="flex-1 min-w-0 bg-transparent text-[13px] text-ink placeholder:text-tideline outline-none border-none"
+          // 16px on mobile prevents iOS from zooming when the input is
+          // focused; 13px is fine on desktop.
+          className="flex-1 min-w-0 bg-transparent text-[16px] lg:text-[13px] text-ink placeholder:text-tideline outline-none border-none"
         />
-        <span className="font-mono text-[9.5px] tracking-[0.1em] text-tideline border border-rule px-1.5">
+        <span className="hidden lg:inline-block font-mono text-[9.5px] tracking-[0.1em] text-tideline border border-rule px-1.5">
           ⌘K
         </span>
       </div>

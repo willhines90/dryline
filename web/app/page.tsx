@@ -87,31 +87,57 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
           boxShadow: "0 1px 0 #0d3b6f, 0 6px 16px -8px rgba(7, 23, 31, 0.18)",
         }}
       >
-        <div className="relative px-4 py-3 flex items-center gap-3 min-w-0">
-          {/* Brand block (left). The search is absolutely centered in the
-              header rather than flex-centered between brand and actions —
-              that way the wordmark can grow/shrink without nudging the
-              search off-axis. */}
-          <Link href="/" className="flex items-center gap-2.5 no-underline shrink-0 group" aria-label="Dryline — home">
-            <DrylineLogo size={30} variant="front" />
-            <span
-              className="font-sans text-[22px] font-semibold tracking-[-0.025em] text-ink leading-none"
+        {/* Mobile: two rows (brand+actions row, search row). lg+: single row
+            with absolutely-centered search between brand (left) and
+            actions (right). `lg:contents` makes the mobile brand-row
+            wrapper "disappear" at lg so its children become siblings of
+            the search/spacer in the flex parent. */}
+        <div className="relative flex flex-col lg:flex-row lg:items-center px-3 lg:px-4 pt-2.5 pb-2 lg:py-3 gap-2 lg:gap-3 min-w-0">
+          <div className="flex items-center justify-between gap-2 min-w-0 lg:contents">
+            <Link
+              href="/"
+              className="flex items-center gap-2.5 no-underline shrink-0 group min-w-0"
+              aria-label="Dryline — home"
             >
-              Dryline
-            </span>
-            <span
-              aria-hidden
-              className="hidden xl:inline-block h-5 w-px bg-ink/15 ml-1.5"
-            />
-            <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline ml-2.5 truncate max-w-[320px]">
-              Follow the water at any Texas address — every claim cited.
-            </span>
-          </Link>
-          {/* Centered search — absolute-positioned so brand/actions can't
-              push it off-center. Max-width keeps it from butting into
-              either side at common viewport widths. */}
-          <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-[420px] px-2 pointer-events-none">
-            <div className="pointer-events-auto">
+              <DrylineLogo size={28} variant="front" />
+              <span className="font-sans text-[20px] sm:text-[22px] font-semibold tracking-[-0.025em] text-ink leading-none">
+                Dryline
+              </span>
+              <span
+                aria-hidden
+                className="hidden xl:inline-block h-5 w-px bg-ink/15 ml-1.5"
+              />
+              <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline ml-2.5 truncate max-w-[320px]">
+                Follow the water at any Texas address — every claim cited.
+              </span>
+            </Link>
+            <div className="flex items-center gap-1.5 shrink-0 lg:ml-auto">
+              <button
+                type="button"
+                onClick={() => setAboutOpen(true)}
+                title="What Dryline is and where the data comes from."
+                className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 min-h-[36px] transition-colors"
+              >
+                About
+              </button>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center w-9 h-9 lg:w-7 lg:h-7 border border-rule text-tideline hover:text-ink hover:border-ink/40 transition-colors"
+                title="View source on GitHub"
+                aria-label="View source on GitHub"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+                </svg>
+              </a>
+            </div>
+          </div>
+          {/* Search. On mobile it's a full-width second row; on lg+ it's
+              absolutely centered so brand+actions can't push it off-axis. */}
+          <div className="w-full lg:absolute lg:left-1/2 lg:-translate-x-1/2 lg:max-w-[420px] lg:px-2 lg:pointer-events-none" role="search">
+            <div className="lg:pointer-events-auto">
               <SearchBar
                 staged={locations}
                 onPick={handlePick}
@@ -120,35 +146,21 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
               />
             </div>
           </div>
-          {/* Spacer that pushes the actions group to the far right. */}
-          <div className="flex-1 min-w-0" />
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setAboutOpen(true)}
-              title="What Dryline is and where the data comes from."
-              className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 transition-colors"
-            >
-              About
-            </button>
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-7 h-7 border border-rule text-tideline hover:text-ink hover:border-ink/40 transition-colors"
-              title="View source on GitHub"
-              aria-label="View source on GitHub"
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-              </svg>
-            </a>
-          </div>
         </div>
       </header>
 
-      <section className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 min-h-0">
-        <div className="lg:col-span-8 min-w-0 min-h-0 border-b border-rule lg:border-b-0 relative">
+      {/* Layout split:
+          - Mobile: vertical flex. Map is the hero (58svh idle, 32svh when an
+            investigation is active so the panel has room to stream). Panel
+            takes the rest and scrolls.
+          - lg+ (≥1024px): side-by-side 8/4 grid, map fills its column. */}
+      <section className="flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-0 min-h-0">
+        <div
+          className={cn(
+            "shrink-0 lg:shrink lg:col-span-8 min-w-0 lg:min-h-0 border-b border-rule lg:border-b-0 relative",
+            anyActive ? "h-[32svh] lg:h-auto" : "h-[58svh] lg:h-auto",
+          )}
+        >
           <TexasMap
             locations={locations}
             focusedLocation={focused}
@@ -159,7 +171,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             }
           />
         </div>
-        <aside className="lg:col-span-4 min-w-0 min-h-0 border-l-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
+        <aside className="flex-1 lg:flex-none lg:col-span-4 min-w-0 min-h-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
           {!anyActive ? (
             <DemoAddressList locations={locations} globalMode={globalMode} />
           ) : (

@@ -61,6 +61,12 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
 
   return (
     <main className="h-svh flex flex-col overflow-hidden bg-background">
+      {/* Visually-hidden H1 — the visible wordmark is a `<span>` because
+          headers carry their own visual identity, but search engines and
+          screen readers need a real h1 to anchor the page semantically. */}
+      <h1 className="sr-only">
+        Dryline — Investigate Texas water at any address. Drought, reservoirs, drinking water, aquifers, and industrial dischargers, cited.
+      </h1>
       <header
         className="shrink-0 relative z-40 bg-paper-deep border-b border-ink/15"
         style={{

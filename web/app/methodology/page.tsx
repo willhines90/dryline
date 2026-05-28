@@ -13,8 +13,53 @@ import { DrylineLogo } from "@/components/dryline/dryline-logo";
 export const metadata: Metadata = {
   title: "Dryline Score · Methodology",
   description:
-    "How the Dryline Score is computed. Five public-data subscores, equally weighted. Every threshold disclosed; every source linked.",
+    "How the Dryline Score is computed. Five public-data subscores — drought, drinking water, aquifer, reservoirs, industrial dischargers — equally weighted. Every threshold disclosed; every source linked.",
   alternates: { canonical: "/methodology" },
+  openGraph: {
+    title: "How the Dryline Score is computed",
+    description:
+      "Five public-data subscores, equally weighted. Every threshold disclosed; every source linked.",
+    type: "article",
+    url: "https://dryline.org/methodology",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "How the Dryline Score is computed",
+    description:
+      "Five public-data subscores, equally weighted. Every threshold disclosed; every source linked.",
+  },
+};
+
+const ARTICLE_LD = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  headline: "How the Dryline Score is computed",
+  description:
+    "Methodology for the Dryline Score: five public-data subscores covering drought, drinking water, aquifer monitoring, reservoirs, and industrial dischargers, equally weighted and fully cited.",
+  url: "https://dryline.org/methodology",
+  inLanguage: "en-US",
+  author: {
+    "@type": "Person",
+    name: "Will Hines",
+    url: "https://github.com/willhines90",
+  },
+  publisher: {
+    "@type": "Organization",
+    name: "Dryline",
+    url: "https://dryline.org",
+    logo: {
+      "@type": "ImageObject",
+      url: "https://dryline.org/icon.svg",
+    },
+  },
+  mainEntityOfPage: "https://dryline.org/methodology",
+  about: [
+    { "@type": "Thing", name: "Texas water supply" },
+    { "@type": "Thing", name: "U.S. Drought Monitor" },
+    { "@type": "Thing", name: "EPA Safe Drinking Water Act" },
+    { "@type": "Thing", name: "Texas aquifers" },
+    { "@type": "Thing", name: "Industrial water pollution" },
+  ],
 };
 
 interface SubscoreSpec {
@@ -153,6 +198,10 @@ const SUBSCORES: SubscoreSpec[] = [
 export default function MethodologyPage() {
   return (
     <main className="min-h-screen bg-background text-ink">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ARTICLE_LD) }}
+      />
       <header className="border-b border-rule bg-background">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-baseline justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 no-underline">

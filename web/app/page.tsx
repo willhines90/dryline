@@ -22,11 +22,10 @@ import {
   useInvestigation,
   useMultiInvestigation,
 } from "@/components/dryline/investigation-provider";
-import { InvestigateButton, ModeToggle } from "@/components/dryline/investigate-button";
 import { ReasoningTrace } from "@/components/dryline/reasoning-trace";
 import { SynthesisCard } from "@/components/dryline/synthesis-card";
 import { ActionsTab, ActionCard } from "@/components/dryline/actions-tab";
-import { DrylineLogo, type LogoVariant } from "@/components/dryline/dryline-logo";
+import { DrylineLogo } from "@/components/dryline/dryline-logo";
 import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
 import { AboutModal } from "@/components/dryline/about-modal";
@@ -51,26 +50,11 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
   const { primary, startNextAvailable } = useMultiInvestigation();
   const focused = primary.location ?? null;
   const investigationActive = primary.status === "streaming";
-  // Mode is no longer a global header concern. It defaults to whatever
-  // the demo address declares (or "personal" for free-text searches);
-  // users flip the lens inside the active investigation panel.
-  const globalMode: Mode = "personal";
   const [aboutOpen, setAboutOpen] = React.useState(false);
-  // Logo picker — temporary. Read ?logo= from the URL once on mount so we
-  // can A/B in the live header without rebuilding. Delete once a variant
-  // is chosen and hard-coded.
-  const [logoVariant, setLogoVariant] = React.useState<LogoVariant>("scallop");
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const v = new URLSearchParams(window.location.search).get("logo");
-    if (v === "scallop" || v === "aquifer" || v === "confluence" || v === "radial" || v === "current") {
-      setLogoVariant(v);
-    }
-  }, []);
 
   const handlePick = React.useCallback(
-    (loc: DemoLocationWithCoords) => startNextAvailable(loc, loc.mode ?? globalMode),
-    [startNextAvailable, globalMode],
+    (loc: DemoLocationWithCoords) => startNextAvailable(loc, loc.mode ?? "personal"),
+    [startNextAvailable],
   );
 
   const anyActive = primary.location;
@@ -149,16 +133,19 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
         </div>
       </header>
 
-      {/* Layout split:
-          - Mobile: vertical flex. Map is the hero (58svh idle, 32svh when an
-            investigation is active so the panel has room to stream). Panel
-            takes the rest and scrolls.
-          - lg+ (≥1024px): side-by-side 8/4 grid, map fills its column. */}
+      {/* Layout:
+          - Idle: map is the entire content area. Sample addresses live
+            on the map as pins AND inside the search dropdown.
+          - Investigation active: a panel slides in. On lg+ it sits to
+            the right of the map (8/4 split). On mobile it stacks below
+            the map (32svh map peek + rest is panel). */}
       <section className="flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-0 min-h-0">
         <div
           className={cn(
-            "shrink-0 lg:shrink lg:col-span-8 min-w-0 lg:min-h-0 border-b border-rule lg:border-b-0 relative",
-            anyActive ? "h-[32svh] lg:h-auto" : "h-[58svh] lg:h-auto",
+            "min-w-0 relative",
+            anyActive
+              ? "shrink-0 h-[32svh] lg:h-auto lg:shrink lg:col-span-8 border-b border-rule lg:border-b-0"
+              : "flex-1 lg:col-span-12",
           )}
         >
           <TexasMap
@@ -171,86 +158,18 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
             }
           />
         </div>
-        <aside className="flex-1 lg:flex-none lg:col-span-4 min-w-0 min-h-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
-          {!anyActive ? (
-            <DemoAddressList locations={locations} globalMode={globalMode} />
-          ) : (
+        {anyActive ? (
+          <aside className="flex-1 lg:flex-none lg:col-span-4 min-w-0 min-h-0 lg:border-l border-rule bg-background flex flex-col overflow-hidden">
             <SlotCtx.Provider value="primary">
               <InvestigationPanel />
             </SlotCtx.Provider>
-          )}
-        </aside>
+          </aside>
+        ) : null}
       </section>
 
       <ActionsTab />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </main>
-  );
-}
-
-function DemoAddressList({
-  locations,
-  globalMode,
-}: {
-  locations: DemoLocationWithCoords[];
-  globalMode: Mode;
-}) {
-  const { startNextAvailable } = useMultiInvestigation();
-  const pick = (loc: DemoLocationWithCoords) =>
-    startNextAvailable(loc, loc.mode ?? globalMode);
-
-  return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3.5">
-      <div>
-        <div className="dryline-label">Try one</div>
-        <h2 className="font-serif text-[20px] leading-tight tracking-[-0.008em] mt-0.5">
-          Sample addresses
-        </h2>
-        <p className="font-serif italic text-tideline text-[12.5px] mt-1 leading-snug">
-          Click any card to investigate. Or type an address up top.
-        </p>
-      </div>
-
-      <ul className="space-y-2">
-        {locations.map((loc) => {
-          const m: Mode = loc.mode ?? "personal";
-          return (
-            <li key={loc.id}>
-              <button
-                type="button"
-                onClick={() => pick(loc)}
-                className={cn(
-                  "group block w-full text-left border border-rule bg-card px-3 py-2.5",
-                  "transition-colors hover:border-ink/40 hover:bg-paper-deep",
-                  "focus:outline-none focus:border-ink",
-                )}
-                aria-label={`Investigate ${loc.label}`}
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="dryline-label truncate">{loc.region}</span>
-                  <span
-                    className={cn(
-                      "shrink-0 font-mono text-[8.5px] tracking-[0.16em] uppercase px-1.5 py-px border",
-                      m === "personal"
-                        ? "text-aquifer border-aquifer/60"
-                        : "text-ochre-deep border-ochre-deep/60",
-                    )}
-                  >
-                    {m === "personal" ? "Homeowner" : "Watchdog"}
-                  </span>
-                </div>
-                <div className="font-serif text-[15px] leading-tight tracking-[-0.008em] mt-0.5 text-ink">
-                  {loc.label}
-                </div>
-                <p className="font-serif italic text-[12px] text-tideline mt-1 leading-snug line-clamp-2">
-                  {loc.headlineStory}
-                </p>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 }
 

@@ -39,7 +39,11 @@ const GROUP_LABELS: Record<LayerGroup, string> = {
   reference: "Reference",
 };
 
-const LS_KEY = "dryline.layer-toggles.v1";
+// Bumped from v1 → v2 when the right-side address panel was removed and
+// sample-address pins became the on-map discovery surface. Resets every
+// returning visitor so they pick up samples=on and don't notice the panel
+// is gone.
+const LS_KEY = "dryline.layer-toggles.v2";
 
 export function useLayerToggles(specs: LayerSpec[]): {
   state: Record<LayerKey, boolean>;

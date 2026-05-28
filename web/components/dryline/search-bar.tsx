@@ -369,6 +369,11 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
                 : c.kind === "live"
                 ? "Live Texas address from OpenStreetMap — runs a fresh investigation against public APIs."
                 : "Texas city — runs a fresh investigation against live public APIs.";
+            // For the seed (no query) view, give staged samples their full
+            // curated headline so the dropdown carries the editorial copy
+            // the old side-panel used to. When the user is typing, drop
+            // back to the compact region tag.
+            const showRichHeadline = !q.trim() && c.kind === "staged" && c.headlineStory;
             return (
               <button
                 key={c.id}
@@ -401,7 +406,18 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
                     {chipLabel}
                   </span>
                 </div>
-                <div className="text-[11.5px] text-tideline mt-0.5">{c.sub}</div>
+                {showRichHeadline ? (
+                  <>
+                    <div className="font-mono text-[9px] tracking-[0.16em] uppercase text-tideline mt-1">
+                      {c.region}
+                    </div>
+                    <p className="font-serif italic text-[12.5px] text-tideline mt-0.5 leading-snug line-clamp-2">
+                      {c.headlineStory}
+                    </p>
+                  </>
+                ) : (
+                  <div className="text-[11.5px] text-tideline mt-0.5">{c.sub}</div>
+                )}
               </button>
             );
           })}

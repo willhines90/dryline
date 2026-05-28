@@ -60,7 +60,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
   const anyActive = primary.location;
 
   return (
-    <main className="h-screen flex flex-col overflow-hidden bg-background">
+    <main className="h-svh flex flex-col overflow-hidden bg-background">
       <header
         className="shrink-0 relative z-40 bg-paper-deep border-b border-ink/15"
         style={{

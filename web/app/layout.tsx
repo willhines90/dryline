@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     "Ogallala",
     "MCP server",
     "agent skill",
-    "OpenAI Responses API",
+    "Gemini",
     "Texas water rights",
     "NPDES",
     "GCD",

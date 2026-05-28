@@ -74,7 +74,7 @@ const SUBSCORES: SubscoreSpec[] = [
       ],
     },
     doesNotSay:
-      "A single monitoring well speaks for its hydrogeologic neighborhood, not the entire aquifer. Multi-decadal trend is a lagging signal; current pumping may be very different from the trend implies.",
+      "A single monitoring well speaks for its hydrogeologic neighborhood, not the entire aquifer. Multi-decadal trend is a lagging signal; current pumping may be very different from what the trend implies.",
   },
   {
     key: "drinkingWater",

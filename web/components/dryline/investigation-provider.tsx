@@ -213,16 +213,26 @@ function useSlotState(getAgentic: () => boolean): {
 } {
   const [state, setState] = React.useState<InvestigationState>(initialState);
   const abortRef = React.useRef<AbortController | null>(null);
+  const watchdogRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearWatchdog = React.useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
 
   const reset = React.useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    clearWatchdog();
     setState(initialState);
-  }, []);
+  }, [clearWatchdog]);
 
   const start = React.useCallback<SlotApi["start"]>(
     async (location, modeOverride) => {
       abortRef.current?.abort();
+      clearWatchdog();
       const ac = new AbortController();
       abortRef.current = ac;
       const effectiveMode: Mode = modeOverride ?? location.mode;
@@ -236,6 +246,25 @@ function useSlotState(getAgentic: () => boolean): {
         score: null,
         error: null,
       });
+
+      // Client-side watchdog. Vercel's serverless cap on the investigate
+      // route is 120s; if the function is killed mid-stream we may never
+      // receive a `done` or `error` event. After 135s of no terminal
+      // state, surface a friendly timeout so the UI doesn't sit on
+      // "streaming" forever.
+      watchdogRef.current = setTimeout(() => {
+        ac.abort();
+        setState((s) =>
+          s.status === "streaming"
+            ? {
+                ...s,
+                status: "error",
+                error:
+                  "Investigation timed out after 135s. The server may be under load — try again or pick a different address.",
+              }
+            : s,
+        );
+      }, 135_000);
 
       let res: Response;
       try {
@@ -259,12 +288,14 @@ function useSlotState(getAgentic: () => boolean): {
           signal: ac.signal,
         });
       } catch (err) {
+        clearWatchdog();
         if (ac.signal.aborted) return;
         setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
         return;
       }
 
       if (!res.ok || !res.body) {
+        clearWatchdog();
         let msg = `HTTP ${res.status}`;
         try {
           const j = (await res.json()) as { error?: string };
@@ -295,9 +326,11 @@ function useSlotState(getAgentic: () => boolean): {
       } catch (err) {
         if (ac.signal.aborted) return;
         setState((s) => ({ ...s, status: "error", error: errorMessage(err) }));
+      } finally {
+        clearWatchdog();
       }
     },
-    [getAgentic],
+    [getAgentic, clearWatchdog],
   );
 
   return { state, start, reset };

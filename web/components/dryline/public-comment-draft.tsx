@@ -97,7 +97,7 @@ export function PublicCommentDraft({ artifact }: { artifact: ArtifactPayload }) 
           {copied ? "Copied ✓" : "Copy draft"}
         </button>
         <span className="font-serif italic text-[12.5px] text-tideline">
-          No send button. Judges should see Dryline does not auto-submit.
+          Dryline never auto-submits — review and copy out by hand.
         </span>
       </div>
     </div>

@@ -92,7 +92,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
                 className="hidden xl:inline-block h-5 w-px bg-ink/15 ml-1.5"
               />
               <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline ml-2.5 truncate max-w-[320px]">
-                Follow the water at any Texas address — every claim cited.
+                Investigate Texas water at any address.
               </span>
             </Link>
             <div className="flex items-center gap-1.5 shrink-0 lg:ml-auto">
@@ -100,7 +100,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
                 type="button"
                 onClick={() => setAboutOpen(true)}
                 title="What Dryline is and where the data comes from."
-                className="font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 py-1.5 min-h-[36px] transition-colors"
+                className="inline-flex items-center justify-center font-mono text-[10px] tracking-[0.18em] uppercase text-tideline hover:text-ink border border-rule px-2.5 h-9 lg:h-8 transition-colors"
               >
                 About
               </button>
@@ -108,7 +108,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center w-9 h-9 lg:w-7 lg:h-7 border border-rule text-tideline hover:text-ink hover:border-ink/40 transition-colors"
+                className="inline-flex items-center justify-center w-9 h-9 lg:w-8 lg:h-8 border border-rule text-tideline hover:text-ink hover:border-ink/40 transition-colors"
                 title="View source on GitHub"
                 aria-label="View source on GitHub"
               >

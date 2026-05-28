@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DemoLocation, Mode, TraceEvent } from "@/lib/types";
 import type { StyleSpecification } from "maplibre-gl";
 import {
@@ -638,6 +638,18 @@ export function TexasMap({
   const mapReadyRef = useRef(false);
   const [mapReadyState, setMapReadyState] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
+  // Layer fetches that failed at least once this session. Surfaced in
+  // the legend so the user understands why a layer renders empty
+  // instead of just seeing invisible gaps.
+  const [failedLayers, setFailedLayers] = useState<Set<string>>(() => new Set());
+  const markLayerFailed = useCallback((label: string) => {
+    setFailedLayers((s) => {
+      if (s.has(label)) return s;
+      const next = new Set(s);
+      next.add(label);
+      return next;
+    });
+  }, []);
   const onLocationClickRef = useRef(onLocationClick);
   // Live TWDB observations keyed by slug. Used to color reservoir glyphs
   // and to render rich hover tooltips with sparklines + historical avg.
@@ -662,6 +674,7 @@ export function TexasMap({
         if (!res.ok) {
           // eslint-disable-next-line no-console
           console.warn("[reservoirs] api not ok", res.status);
+          markLayerFailed("Reservoirs");
           return;
         }
         const payload = (await res.json()) as { reservoirs?: ReservoirObservation[] };
@@ -680,6 +693,7 @@ export function TexasMap({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[reservoirs] fetch failed", err);
+        markLayerFailed("Reservoirs");
       }
     })();
     return () => {
@@ -1233,7 +1247,11 @@ export function TexasMap({
     (async () => {
       try {
         const res = await fetch("/api/layers/usdm", { cache: "force-cache" });
-        if (cancelled || !res.ok) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          markLayerFailed("Drought (USDM)");
+          return;
+        }
         const fc = await res.json();
         if (cancelled) return;
 
@@ -1326,6 +1344,7 @@ export function TexasMap({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] drought layer failed:", err);
+        markLayerFailed("Drought (USDM)");
       }
     })();
 
@@ -2000,7 +2019,11 @@ export function TexasMap({
     (async () => {
       try {
         const res = await fetch("/api/layers/usgs-gauges", { cache: "force-cache" });
-        if (cancelled || !res.ok) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          markLayerFailed("Stream gauges");
+          return;
+        }
         const payload = (await res.json()) as {
           gauges?: Array<{
             siteCode: string;
@@ -2202,6 +2225,7 @@ export function TexasMap({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] gauges layer failed:", err);
+        markLayerFailed("Stream gauges");
       }
     })();
     return () => {
@@ -2664,7 +2688,11 @@ export function TexasMap({
     const load = async () => {
       try {
         const res = await fetch("/api/layers/nws-alerts");
-        if (cancelled || !res.ok) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          markLayerFailed("Weather alerts");
+          return;
+        }
         const fc = await res.json();
         if (cancelled) return;
         const existing = map.getSource(SRC) as
@@ -2793,6 +2821,7 @@ export function TexasMap({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] nws-alerts failed:", err);
+        markLayerFailed("Weather alerts");
       }
     };
     load();
@@ -2828,7 +2857,7 @@ export function TexasMap({
     <div className="relative h-full min-h-0 overflow-hidden bg-foam">
       <div ref={containerRef} className="dryline-map absolute inset-0" />
 
-      <MapLegend dark={dark} />
+      <MapLegend dark={dark} failedLayers={failedLayers} />
 
 
       <LayerControl
@@ -2858,7 +2887,7 @@ export function TexasMap({
  * persistence so it stays where you left it. Internally three sections:
  * Pins (what shapes mean), Drought ramp, Stream gauges by cfs.
  */
-function MapLegend({ dark }: { dark: boolean }) {
+function MapLegend({ dark, failedLayers }: { dark: boolean; failedLayers: Set<string> }) {
   const LS_KEY = "dryline.legend-open.v1";
   const [open, setOpen] = useState(true);
   useEffect(() => {
@@ -3025,6 +3054,33 @@ function MapLegend({ dark }: { dark: boolean }) {
               </li>
             </ul>
           </div>
+
+          {/* Layer health: surfaced only when something has actually
+              failed this session. Better than a silent map gap. */}
+          {failedLayers.size > 0 ? (
+            <div
+              className={cn(
+                "border-t pt-2.5",
+                dark ? "border-rust/40" : "border-rust/30",
+              )}
+            >
+              <div className={cn(
+                "font-mono text-[9.5px] tracking-[0.18em] uppercase mb-1 flex items-center gap-1.5",
+                dark ? "text-rust" : "text-rust",
+              )}>
+                <span aria-hidden>⚠</span>
+                <span>Live layers unavailable</span>
+              </div>
+              <ul className={cn(
+                "text-[10.5px] leading-snug space-y-0.5",
+                dark ? "text-spring/75" : "text-ink/75",
+              )}>
+                {Array.from(failedLayers).map((name) => (
+                  <li key={name}>· {name}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

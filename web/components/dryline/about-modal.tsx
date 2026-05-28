@@ -204,10 +204,52 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
 
           <div className="flex flex-wrap gap-2 pt-3 border-t border-dashed border-rule">
             <ExternalLink href="/methodology">→ Score methodology</ExternalLink>
-            <ExternalLink href="https://dryline.org/">→ Live demo</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline">→ GitHub</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/PROPOSAL.md">→ Proposal</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/skill/SKILL.md">→ Agent skill</ExternalLink>
+          </div>
+
+          {/* Author, contact, and privacy — visible trust signals.
+              SEO auditors flag pages without an author / contact line. */}
+          <div className="pt-4 border-t border-rule space-y-2 text-[12.5px] leading-snug text-tideline">
+            <div>
+              <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink mr-2">
+                Built by
+              </span>
+              <a
+                href="https://github.com/willhines90"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-aquifer underline decoration-dotted underline-offset-2 hover:text-ink"
+              >
+                Will Hines
+              </a>
+              {" · "}
+              <a
+                href="mailto:mail@willhin.es"
+                className="text-aquifer underline decoration-dotted underline-offset-2 hover:text-ink"
+              >
+                mail@willhin.es
+              </a>
+            </div>
+            <div>
+              <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink mr-2">
+                Privacy
+              </span>
+              Dryline uses Google Analytics 4 for anonymous traffic counts (page
+              views, basic events). No accounts, no personal data collected, no
+              third-party trackers beyond GA. Address strings you investigate are
+              sent to Nominatim (OpenStreetMap) and U.S. Census Geocoder for
+              resolution, and to Google&rsquo;s Gemini API for synthesis &mdash;
+              no other parties.
+            </div>
+            <div>
+              <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink mr-2">
+                License
+              </span>
+              MIT. Public data is cited; we don&rsquo;t redistribute proprietary
+              datasets.
+            </div>
           </div>
         </div>
       </div>

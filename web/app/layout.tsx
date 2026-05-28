@@ -33,8 +33,11 @@ const geistMono = Geist_Mono({
 
 const SITE_URL = "https://dryline.org";
 const TITLE = "Dryline - Investigate Texas water at any address";
+// Tight ~200 char meta description. The longer founder's-note copy lives
+// in the About modal; this is what shows up under search results and in
+// link unfurls, where brevity wins.
 const DESCRIPTION =
-  "Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. Type any Texas address and Dryline streams a cited investigation across drought, reservoirs, drinking water, aquifer monitoring, and federally-reportable industrial dischargers — every claim sourced, structured caveats, drafted civic action.";
+  "Type any Texas address. Dryline streams a cited investigation across drought, reservoirs, drinking water, aquifers, and industrial dischargers — every claim sourced, every caveat structured.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

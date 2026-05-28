@@ -1,6 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <rect width="32" height="32" fill="#eef2f3"/>
-  <line x1="5" y1="25" x2="27" y2="7" stroke="#07171f" stroke-width="2.4" stroke-dasharray="3 3" stroke-linecap="round"/>
-  <circle cx="5" cy="25" r="3.5" fill="#0d3b6f"/>
-  <circle cx="27" cy="7" r="3.5" fill="#b58a52" stroke="#7a5a2c" stroke-width="1"/>
+  <line x1="6" y1="4" x2="6" y2="28" stroke="#0d3b6f" stroke-width="2.6" stroke-linecap="round"/>
+  <line x1="6" y1="4" x2="11" y2="4" stroke="#0d3b6f" stroke-width="2.6" stroke-linecap="round"/>
+  <line x1="6" y1="28" x2="11" y2="28" stroke="#0d3b6f" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M 11 4 C 22 4, 26.5 9.5, 26.5 16 C 26.5 22.5, 22 28, 11 28" fill="none" stroke="#0d3b6f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="14.5,3 17,0 15.7,4.5" fill="#0d3b6f"/>
+  <polygon points="21,5.5 25,3.5 22,7.8" fill="#0d3b6f"/>
+  <polygon points="25.5,10.5 30,10 26.7,13" fill="#0d3b6f"/>
+  <polygon points="25.5,21.5 30,22 26.7,19" fill="#0d3b6f"/>
+  <polygon points="21,26.5 25,28.5 22,24.2" fill="#0d3b6f"/>
+  <polygon points="14.5,29 17,32 15.7,27.5" fill="#0d3b6f"/>
 </svg>

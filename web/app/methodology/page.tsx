@@ -229,6 +229,31 @@ export default function MethodologyPage() {
             One 0–100 number per Texas address. Five public-data subscores, equally
             weighted. Every threshold is disclosed below. Higher score = more water stress.
           </p>
+          <div className="font-mono text-[10.5px] tracking-[0.18em] uppercase text-tideline pt-2">
+            By{" "}
+            <a
+              href="https://github.com/willhines90"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-aquifer underline decoration-dotted underline-offset-2 hover:text-ink"
+            >
+              Will Hines
+            </a>
+            <span aria-hidden> · </span>
+            <a
+              href="mailto:mail@willhin.es"
+              className="text-aquifer underline decoration-dotted underline-offset-2 hover:text-ink"
+            >
+              mail@willhin.es
+            </a>
+            <span aria-hidden> · </span>
+            <Link
+              href="/"
+              className="text-aquifer underline decoration-dotted underline-offset-2 hover:text-ink"
+            >
+              ← Open the map
+            </Link>
+          </div>
         </section>
 
         <section className="space-y-3">

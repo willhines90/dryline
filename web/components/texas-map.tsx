@@ -2866,7 +2866,7 @@ export function TexasMap({
         onToggle={toggleLayer}
         onSetMany={setManyLayers}
         dark={dark}
-        className="pointer-events-auto absolute right-2 bottom-2 lg:right-4 lg:bottom-4 w-[170px] lg:w-[230px]"
+        className="pointer-events-auto absolute right-2 lg:right-4 w-[170px] lg:w-[230px] bottom-[calc(0.75rem+env(safe-area-inset-bottom))] lg:bottom-4"
       />
 
       {mountError ? (
@@ -2918,7 +2918,8 @@ function MapLegend({ dark, failedLayers }: { dark: boolean; failedLayers: Set<st
   return (
     <div
       className={cn(
-        "pointer-events-auto absolute left-2 bottom-2 lg:left-4 lg:bottom-4 w-[170px] lg:w-[240px]",
+        "pointer-events-auto absolute left-2 lg:left-4 w-[170px] lg:w-[240px]",
+        "bottom-[calc(0.75rem+env(safe-area-inset-bottom))] lg:bottom-4",
         "border backdrop-blur-sm shadow-paper",
         dark
           ? "border-aquifer/50 bg-[rgba(8,14,22,0.85)] text-spring"

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Newsreader, Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -79,6 +79,16 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
   },
   category: "civic technology",
+};
+
+// viewportFit=cover lets the page draw into the safe-area inset region
+// on notched iPhones. We use env(safe-area-inset-bottom) on the map's
+// floating chips so they clear the home indicator instead of hiding
+// behind it.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

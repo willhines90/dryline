@@ -78,6 +78,43 @@ interface CacheEntry {
 }
 const cache = new Map<string, CacheEntry>();
 
+// Per-IP rate limit. Each investigation runs Gemini + ~8 live data
+// tools and costs real money; without this a script can spend it for
+// us. The window is in-memory and resets on cold start — fine for
+// raising the floor against drive-by abuse and bots; a viral spike
+// from a single ASN would still get through. For durable distributed
+// limiting we'd want Upstash Redis / Vercel KV. Punted to post-launch.
+const RL_WINDOW_MS = 10 * 60 * 1000;
+const RL_MAX = 5;
+const rateBucket = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): { allowed: boolean; resetAt: number; remaining: number } {
+  const now = Date.now();
+  const entry = rateBucket.get(ip);
+  if (!entry || entry.resetAt < now) {
+    rateBucket.set(ip, { count: 1, resetAt: now + RL_WINDOW_MS });
+    return { allowed: true, resetAt: now + RL_WINDOW_MS, remaining: RL_MAX - 1 };
+  }
+  if (entry.count >= RL_MAX) {
+    return { allowed: false, resetAt: entry.resetAt, remaining: 0 };
+  }
+  entry.count++;
+  return { allowed: true, resetAt: entry.resetAt, remaining: RL_MAX - entry.count };
+}
+
+function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return (
+    req.headers.get("x-real-ip") ??
+    req.headers.get("cf-connecting-ip") ??
+    "unknown"
+  );
+}
+
 let skillPromptCache: string | null = null;
 async function getSkillPrompt(): Promise<string> {
   if (skillPromptCache) return skillPromptCache;
@@ -741,6 +778,31 @@ ${formatToolResultsForSynthesis(labeledResults)}`;
 }
 
 export async function POST(req: Request): Promise<Response> {
+  // Rate-limit BEFORE we touch the body — keeps the bucket honest even
+  // if the request is malformed. A cache HIT downstream is cheap, but
+  // every miss is real Gemini spend, so we limit on the request not the
+  // miss.
+  const ip = clientIp(req);
+  const rl = checkRateLimit(ip);
+  if (!rl.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));
+    return new Response(
+      JSON.stringify({
+        error: `You've hit the per-IP rate limit (${RL_MAX} investigations per ${RL_WINDOW_MS / 60_000} minutes). Try again in ~${Math.ceil(retryAfter / 60)} min.`,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(retryAfter),
+          "X-RateLimit-Limit": String(RL_MAX),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(Math.ceil(rl.resetAt / 1000)),
+        },
+      },
+    );
+  }
+
   let address: string;
   let mode: Mode = "personal";
   let headlineStory: string | null = null;

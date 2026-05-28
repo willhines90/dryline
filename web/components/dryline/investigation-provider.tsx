@@ -24,6 +24,7 @@
  */
 
 import * as React from "react";
+import { track } from "@/lib/analytics";
 import type {
   ArtifactPayload,
   DemoLocationWithCoords,
@@ -245,6 +246,20 @@ function useSlotState(getAgentic: () => boolean): {
         artifact: null,
         score: null,
         error: null,
+      });
+      track("investigate_started", {
+        locationId: location.id,
+        locationLabel: location.label,
+        mode: effectiveMode,
+        kind: location.id.startsWith("freetext:")
+          ? "freetext"
+          : location.id.startsWith("live:")
+          ? "live"
+          : location.id.startsWith("known:")
+          ? "known"
+          : location.id.startsWith("gauge:") || location.id.startsWith("reservoir:")
+          ? "map_pin"
+          : "sample",
       });
 
       // Client-side watchdog. Vercel's serverless cap on the investigate

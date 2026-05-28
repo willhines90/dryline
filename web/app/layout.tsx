@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Newsreader, Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
+
+const GA_MEASUREMENT_ID = "G-M4P8YR9XSZ";
 
 // Newsreader (editorial serif) + Geist (sans) + Geist Mono (data / trace).
 // Loaded once at the layout level and exposed via CSS variables so
@@ -89,7 +92,24 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${newsreader.variable} ${geist.variable} ${geistMono.variable}`}
     >
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {children}
+        {/* Google Analytics 4. `afterInteractive` is the canonical strategy
+            for gtag — loads after hydration so it doesn't block first
+            paint, but in time to capture page_view on landing. */}
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="ga-init" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
+      </body>
     </html>
   );
 }

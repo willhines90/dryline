@@ -5,7 +5,25 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Dryline — Follow the water at any Texas address — every claim cited.";
 
-export default function OpengraphImage() {
+// Edge-safe ArrayBuffer → base64 (no Node Buffer in the edge runtime).
+function toBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+export default async function OpengraphImage() {
+  // Brand wordmark (the slate D mark + "Dryline" set in Lato), colocated so
+  // Next bundles it for the edge runtime via the import.meta.url pattern.
+  // We embed the rasterized lockup rather than render the mark's SVG inline
+  // because Satori (next/og) has incomplete clipPath / fill-rule support and
+  // the mark's wave-band negative space relies on both.
+  const wordmark = await fetch(
+    new URL("./og-wordmark.png", import.meta.url),
+  ).then((r) => r.arrayBuffer());
+  const wordmarkSrc = `data:image/png;base64,${toBase64(wordmark)}`;
+
   return new ImageResponse(
     (
       <div
@@ -23,26 +41,8 @@ export default function OpengraphImage() {
           overflow: "hidden",
         }}
       >
-        {/* Dryline mark — large, top-left */}
-        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <svg width="64" height="64" viewBox="0 0 32 32">
-            <line
-              x1="5"
-              y1="25"
-              x2="27"
-              y2="7"
-              stroke="#07171f"
-              strokeWidth="2.4"
-              strokeDasharray="3 3"
-              strokeLinecap="round"
-            />
-            <circle cx="5" cy="25" r="3.5" fill="#0d3b6f" />
-            <circle cx="27" cy="7" r="3.5" fill="#b58a52" stroke="#7a5a2c" strokeWidth="1" />
-          </svg>
-          <span style={{ fontSize: 56, fontWeight: 600, letterSpacing: "-0.012em" }}>
-            Dryline
-          </span>
-        </div>
+        {/* Brand wordmark — top-left */}
+        <img src={wordmarkSrc} width={237} height={64} alt="Dryline" />
 
         {/* Hook */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>

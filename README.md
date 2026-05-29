@@ -11,6 +11,10 @@ Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (
 **Live demo:** [dryline.org](https://dryline.org/)
 **Repo:** [github.com/willhines90/dryline](https://github.com/willhines90/dryline)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
+Open source under the [MIT License](./LICENSE) — free to use, modify, and build on.
+
 ---
 
 ## The 90-second pitch

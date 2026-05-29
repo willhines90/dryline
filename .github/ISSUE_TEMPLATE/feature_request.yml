@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a new capability or improvement for Dryline.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dryline has a deliberately sharp wedge: address-anchored, Texas-deep,
+        water-as-the-lens, every claim cited. Proposals that pull it toward a
+        general civic dashboard or a chatbot are out of scope by design — see
+        `LANDSCAPE.md`. The best requests sharpen the wedge rather than widen it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the user need or gap, not just the feature.
+      placeholder: A resident near a new permit can't easily see ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you build or change?
+    validations:
+      required: true
+  - type: dropdown
+    id: wedge
+    attributes:
+      label: How does this fit the wedge?
+      description: Dryline stacks synthesis, interpretation, action, and water-as-the-lens.
+      options:
+        - Deepens synthesis (combining existing sources)
+        - Improves interpretation (caveats, confidence, what data doesn't say)
+        - Strengthens action (a better-drafted civic artifact)
+        - New water-supply data source
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Data sources
+      description: >
+        If this needs new data, name the upstream source(s) and link them.
+        Every Dryline claim must be backed by a citable URL.
+    validations:
+      required: false

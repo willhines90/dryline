@@ -1,0 +1,61 @@
+name: Bug report
+description: Report something in Dryline that isn't working as expected.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please include enough
+        detail that someone can reproduce the problem.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Dryline is affected?
+      options:
+        - web (map / investigation surface)
+        - mcp (server / a specific tool)
+        - skill
+        - data / sources
+        - other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+      placeholder: When I toggle on the aquifer layer and click a stream gauge, ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Include the address you investigated if relevant.
+      placeholder: |
+        1. Go to dryline.org
+        2. Investigate "..."
+        3. Toggle on ...
+        4. See error
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser + OS, or Node version for MCP issues.
+      placeholder: Chrome 130 on macOS 15 / Node 20.11
+    validations:
+      required: false
+  - type: textarea
+    id: sources
+    attributes:
+      label: Data or source concern
+      description: >
+        If this is about a wrong or stale number, paste the claim, the source
+        link Dryline cited, and what you believe the correct value is. Remember
+        that data quality is surfaced through caveats, not treated as a defect.
+    validations:
+      required: false

@@ -2002,9 +2002,20 @@ export function TexasMap({
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
           );
+        // Several Texas rivers share a name with rivers elsewhere, so the
+        // bare name resolves to a Wikipedia *disambiguation* page (e.g.
+        // "Trinity River", "Red River"). Map those to the specific Texas
+        // article; unmapped rivers (Brazos, Pecos, Rio Grande, …) resolve
+        // correctly from the name as-is.
+        const RIVER_WIKI_TITLE: Record<string, string> = {
+          "Trinity River": "Trinity River (Texas)",
+          "Red River": "Red River of the South",
+          "Sabine River": "Sabine River (Texas–Louisiana)",
+          "Guadalupe River": "Guadalupe River (Texas)",
+          "Colorado River (TX)": "Colorado River (Texas)",
+        };
         const wikipediaSlug = (name: string) =>
-          name
-            .replace(/\(TX\)/i, "(Texas)")
+          (RIVER_WIKI_TITLE[name] ?? name.replace(/\(TX\)/i, "(Texas)"))
             .trim()
             .replace(/\s+/g, "_");
         const riverRender = (
@@ -2261,10 +2272,14 @@ export function TexasMap({
           onInvestigate: (f, lngLat) => {
             const p = f.properties as GaugeProps;
             if (!p.siteName) return;
-            // USGS site names follow patterns like "Colorado Rv at Austin, TX"
-            // — extract the trailing "<City>, TX" fragment for Nominatim.
-            const cityMatch = p.siteName.match(/([A-Z][a-zA-Z. -]+),\s*TX$/);
-            const cityToken = cityMatch?.[1]?.trim() ?? "Texas";
+            // USGS site names look like "Colorado Rv at Austin, TX" or
+            // "Guadalupe Rv nr Spring Branch, TX". The place is the segment
+            // after the last locator word (at/nr/near/above/below), before
+            // ", TX" — used only for a readable label now that the gauge's
+            // exact lat/lng (below) drives resolution.
+            const beforeTx = p.siteName.replace(/,\s*TX\s*$/i, "");
+            const locMatch = beforeTx.match(/\b(?:at|nr|near|above|abv|below|blw)\s+(.+)$/i);
+            const cityToken = (locMatch?.[1] ?? beforeTx).trim() || "Texas";
             const synth: MapLocation = {
               id: `gauge:${p.siteCode ?? `${lngLat.lat},${lngLat.lng}`}`,
               label: p.siteName,
@@ -2387,16 +2402,21 @@ export function TexasMap({
           s.replace(/[&<>"']/g, (c) =>
             c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
           );
-        const aquiferWikiSlug: Record<string, string> = {
-          OGALLALA: "Ogallala_Aquifer",
-          "EDWARDS-TRINITY": "Edwards%E2%80%93Trinity_Aquifer",
-          TRINITY: "Trinity_Aquifer",
-          EDWARDS: "Edwards_Aquifer",
-          CARRIZO: "Carrizo%E2%80%93Wilcox_Aquifer",
-          "GULF_COAST": "Gulf_Coast_Aquifer",
-          "PECOS VALLEY": "Pecos_Valley_aquifer",
-          SEYMOUR: "Seymour_Aquifer",
-          "HUECO_BOLSON": "Hueco_Bolson",
+        // Link each aquifer to its authoritative TWDB major-aquifer page.
+        // (Most Texas aquifers have no dedicated Wikipedia article — only
+        // Ogallala, Edwards, and Carrizo-Wilcox do — so Wikipedia links
+        // dead-ended. TWDB has a page for every major aquifer and is the
+        // source this layer already draws from.)
+        const aquiferTwdbSlug: Record<string, string> = {
+          OGALLALA: "ogallala",
+          "EDWARDS-TRINITY": "edwards-trinity-plateau",
+          TRINITY: "trinity",
+          EDWARDS: "edwards-bfz",
+          CARRIZO: "carrizo-wilcox",
+          "GULF_COAST": "gulf-coast",
+          "PECOS VALLEY": "pecos-valley",
+          SEYMOUR: "seymour",
+          "HUECO_BOLSON": "hueco-mesilla-bolsons",
         };
         const aquiferRender = (
           f: import("maplibre-gl").MapGeoJSONFeature,
@@ -2406,7 +2426,7 @@ export function TexasMap({
           const label = AQUIFER_LABELS[raw] ?? raw;
           const color = AQUIFER_COLORS[raw] ?? "#9a8a6e";
           const fact = AQUIFER_FACTS[raw];
-          const wikiSlug = aquiferWikiSlug[raw];
+          const twdbSlug = aquiferTwdbSlug[raw];
           const factBody = fact
             ? `<div style="margin-top:6px;border-top:1px solid #c8d6da;padding-top:6px">
                 <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#4a6c78">Extent</div>
@@ -2416,8 +2436,8 @@ export function TexasMap({
                 ${pinned ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12px;color:#4a6c78;line-height:1.4;margin-top:6px">${escape(fact.story)}</div>` : ""}
               </div>`
             : "";
-          const linkBody = pinned && wikiSlug
-            ? `<a href="https://en.wikipedia.org/wiki/${wikiSlug}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">Read more on Wikipedia ↗</a>`
+          const linkBody = pinned && twdbSlug
+            ? `<a href="https://www.twdb.texas.gov/groundwater/aquifer/majors/${twdbSlug}.asp" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">TWDB aquifer page ↗</a>`
             : "";
           return `<div style="padding:8px 11px;max-width:260px">
             <div style="display:flex;align-items:center;gap:6px">

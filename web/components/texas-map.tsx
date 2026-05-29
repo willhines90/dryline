@@ -156,6 +156,12 @@ interface LayerPopupOptions {
     feature: import("maplibre-gl").MapGeoJSONFeature,
     lngLat: import("maplibre-gl").LngLat,
   ) => void;
+  /** Layer ids that take precedence over this one. If any of them has a
+   *  feature under the cursor, this layer yields — it won't open a
+   *  preview or pin. Used so a broad area polygon (aquifer, basin,
+   *  drought, ...) never steals hover/click from a small point feature
+   *  (pin, stream gauge, reservoir) sitting on top of it. */
+  yieldToLayers?: string[];
   className?: string;
 }
 
@@ -177,6 +183,30 @@ interface LayerPopupController {
 // polygon layers (aquifer + dryline-corridor + drought) stack their
 // previews on top of each other when the cursor sits inside all three.
 const _layerPopupRegistry = new Set<LayerPopupController>();
+
+// Interactive point layers, in bottom-to-top paint order. These small
+// features (stream gauges, reservoir glyphs, sample-address pins) must
+// always sit ABOVE the broad area fills (aquifer, basin, drought,
+// corridor, alerts) so they stay visible and grabbable when a
+// screen-filling polygon is toggled on. `raisePointLayers` re-asserts
+// this order; the popup `yieldToLayers` option handles the matching
+// hover/click precedence.
+const POINT_LAYER_PRIORITY = [
+  "dryline-gauges-circles",
+  "dryline-gauges-center",
+  "dryline-reservoirs-symbols",
+  "dryline-demo-pins-symbols",
+] as const;
+
+function raisePointLayers(map: MapInstance): void {
+  for (const id of POINT_LAYER_PRIORITY) {
+    try {
+      if (map.getLayer(id)) map.moveLayer(id); // no beforeId → move to top
+    } catch {
+      /* idempotent */
+    }
+  }
+}
 
 function setupLayerPopup(
   map: MapInstance,
@@ -210,8 +240,32 @@ function setupLayerPopup(
     preventDefault?: () => void;
   };
 
+  // True when a higher-priority point layer (pin / gauge / reservoir)
+  // has a feature under the cursor. Area/line layers yield to it so the
+  // small feature on top always wins the interaction, regardless of
+  // which layer's listener was registered most recently.
+  const pointAbove = (e: Evt): boolean => {
+    const layers = (opts.yieldToLayers ?? []).filter((id) => map.getLayer(id));
+    if (!layers.length) return false;
+    try {
+      return map.queryRenderedFeatures(e.point, { layers }).length > 0;
+    } catch {
+      return false;
+    }
+  };
+
   const onHover = (e: Evt) => {
     if (isPinned) return;
+    if (pointAbove(e)) {
+      // A clickable point feature owns this pixel — drop our own preview
+      // and leave the pointer cursor for the point layer to manage.
+      if (isPreviewOpen) {
+        previewPopup.remove();
+        isPreviewOpen = false;
+      }
+      map.getCanvas().style.cursor = "pointer";
+      return;
+    }
     const f = e.features?.[0];
     if (!f) return;
     map.getCanvas().style.cursor = "pointer";
@@ -244,6 +298,9 @@ function setupLayerPopup(
   const onClick = (e: Evt) => {
     const f = e.features?.[0];
     if (!f) return;
+    // Yield the click to a point layer on top of us; it will pin its own
+    // popup (and close any stale area pin via the shared registry).
+    if (pointAbove(e)) return;
     e.preventDefault?.();
     previewPopup.remove();
     isPreviewOpen = false;
@@ -1338,9 +1395,11 @@ export function TexasMap({
           hoverEvent: "mousemove",
           previewHtml: (f) => droughtRender(f, false),
           pinnedHtml: (f) => droughtRender(f, true),
+          yieldToLayers: [...POINT_LAYER_PRIORITY],
           className: "dryline-drought-popup",
         });
         (map as MapInstance & { __droughtPopupCtl?: LayerPopupController }).__droughtPopupCtl = ctl;
+        raisePointLayers(map);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] drought layer failed:", err);
@@ -1968,9 +2027,11 @@ export function TexasMap({
           hoverEvent: "mousemove",
           previewHtml: (f) => riverRender(f, false),
           pinnedHtml: (f) => riverRender(f, true),
+          yieldToLayers: [...POINT_LAYER_PRIORITY],
           className: "dryline-river-popup",
         });
         (map as MapInstance & { __riverPopupCtl?: LayerPopupController; __riverFlowFrame?: number | null }).__riverPopupCtl = ctl;
+        raisePointLayers(map);
         (map as MapInstance & { __riverFlowFrame?: number | null }).__riverFlowFrame = flowFrame;
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -2373,9 +2434,11 @@ export function TexasMap({
           hoverEvent: "mousemove",
           previewHtml: (f) => aquiferRender(f, false),
           pinnedHtml: (f) => aquiferRender(f, true),
+          yieldToLayers: [...POINT_LAYER_PRIORITY],
           className: "dryline-aquifer-popup",
         });
         (map as MapInstance & { __aquiferPopupCtl?: LayerPopupController }).__aquiferPopupCtl = ctl;
+        raisePointLayers(map);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] aquifer layer failed:", err);
@@ -2487,9 +2550,11 @@ export function TexasMap({
           hoverEvent: "mousemove",
           previewHtml: (f) => basinRender(f, false),
           pinnedHtml: (f) => basinRender(f, true),
+          yieldToLayers: [...POINT_LAYER_PRIORITY],
           className: "dryline-basin-popup",
         });
         (map as MapInstance & { __basinPopupCtl?: LayerPopupController }).__basinPopupCtl = ctl;
+        raisePointLayers(map);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] basins failed:", err);
@@ -2577,9 +2642,11 @@ export function TexasMap({
           hoverEvent: "mousemove",
           previewHtml: (f) => drylineRender(f, false),
           pinnedHtml: (f) => drylineRender(f, true),
+          yieldToLayers: [...POINT_LAYER_PRIORITY],
           className: "dryline-corridor-popup",
         });
         (map as MapInstance & { __drylineCorridorPopupCtl?: LayerPopupController }).__drylineCorridorPopupCtl = ctl;
+        raisePointLayers(map);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[TexasMap] dryline corridor failed:", err);
@@ -2814,9 +2881,11 @@ export function TexasMap({
             hoverEvent: "mousemove",
             previewHtml: (f) => alertRender(f, false),
             pinnedHtml: (f) => alertRender(f, true),
+            yieldToLayers: [...POINT_LAYER_PRIORITY],
             className: "dryline-alert-popup",
           });
           (map as MapInstance & { __alertPopupCtl?: LayerPopupController }).__alertPopupCtl = ctl;
+          raisePointLayers(map);
         }
       } catch (err) {
         // eslint-disable-next-line no-console

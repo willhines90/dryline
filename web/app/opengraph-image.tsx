@@ -3,7 +3,7 @@ import { ImageResponse } from "next/og";
 export const runtime = "edge";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Dryline — Investigate Texas water at any address.";
+export const alt = "Dryline — Follow the water at any Texas address — every claim cited.";
 
 export default function OpengraphImage() {
   return new ImageResponse(
@@ -87,7 +87,7 @@ export default function OpengraphImage() {
             textTransform: "uppercase",
           }}
         >
-          <span>Investigate Texas water at any address.</span>
+          <span>Follow the water at any Texas address.</span>
           <span>github.com/willhines90/dryline</span>
         </div>
       </div>

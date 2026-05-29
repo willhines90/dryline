@@ -49,7 +49,7 @@ const lora = Lora({
 });
 
 const SITE_URL = "https://dryline.org";
-const TITLE = "Dryline - Investigate Texas water at any address";
+const TITLE = "Dryline — Follow the water at any Texas address";
 // Tight ~200 char meta description. The longer founder's-note copy lives
 // in the About modal; this is what shows up under search results and in
 // link unfurls, where brevity wins.

@@ -65,7 +65,7 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
           headers carry their own visual identity, but search engines and
           screen readers need a real h1 to anchor the page semantically. */}
       <h1 className="sr-only">
-        Dryline — Investigate Texas water at any address. Drought, reservoirs, drinking water, aquifers, and industrial dischargers, cited.
+        Dryline — Follow the water at any Texas address. Drought, reservoirs, drinking water, aquifers, and industrial dischargers — every claim cited.
       </h1>
       <header
         className="shrink-0 relative z-40 bg-paper-deep border-b border-ink/15"

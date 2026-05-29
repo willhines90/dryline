@@ -85,8 +85,8 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
             >
               Dryline
             </h2>
-            <p className="font-serif italic text-[14px] text-tideline mt-1">
-              Investigate Texas water at any address.
+            <p className="font-tagline italic text-[14px] text-tideline mt-1">
+              Follow the water at any Texas address — every claim cited.
             </p>
           </div>
           <button

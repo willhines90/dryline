@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 130" width="480" height="130" role="img" aria-label="Dryline, white">
+  <title>Dryline (white, for dark backgrounds)</title>
+  <defs>
+    <clipPath id="dryline-wm-clip-w">
+      <path d="M 0 0 L 0 130 L 40 130 Q 130 130 130 65 Q 130 0 40 0 Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#dryline-wm-clip-w)">
+    <path fill="#FFFFFF" fill-rule="evenodd" d="M 0 0 L 0 130 L 40 130 Q 130 130 130 65 Q 130 0 40 0 Z M -4 27 Q 18 21 40 27 Q 62 33 84 27 Q 106 21 128 27 Q 150 33 140 27 L 140 37 Q 150 43 128 37 Q 106 31 84 37 Q 62 43 40 37 Q 18 31 -4 37 Z M -4 60 Q 18 54 40 60 Q 62 66 84 60 Q 106 54 128 60 Q 150 66 140 60 L 140 70 Q 150 76 128 70 Q 106 64 84 70 Q 62 76 40 70 Q 18 64 -4 70 Z M -4 93 Q 18 87 40 93 Q 62 99 84 93 Q 106 87 128 93 Q 150 99 140 93 L 140 103 Q 150 109 128 103 Q 106 97 84 103 Q 62 109 40 103 Q 18 97 -4 103 Z"/>
+  </g>
+  <text x="162" y="91" font-family="Lato, 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif" font-size="92" font-weight="500" fill="#FFFFFF" letter-spacing="-2">Dryline</text>
+</svg>

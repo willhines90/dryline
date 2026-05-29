@@ -1,0 +1,47 @@
+{
+  "name": "Dryline",
+  "tagline": "Follow the water at any Texas address — every claim cited.",
+  "colors": {
+    "brand": {
+      "primary": "#1E293B",
+      "primaryHsl": "hsl(217, 33%, 17%)",
+      "description": "Slate-800 — the mark's solid fill and the wordmark text on light surfaces."
+    },
+    "inverse": {
+      "primary": "#FFFFFF",
+      "description": "Used for the mark and wordmark on dark surfaces."
+    },
+    "surface": {
+      "light": "#FFFFFF",
+      "lightSoft": "#F8FAFC",
+      "dark": "#0F172A",
+      "darkSoft": "#1E293B"
+    },
+    "text": {
+      "primary": "#1E293B",
+      "secondary": "#64748B",
+      "muted": "#94A3B8",
+      "onDark": "#F1F5F9",
+      "onDarkMuted": "#94A3B8"
+    },
+    "tagline": {
+      "color": "#64748B",
+      "fontStyle": "italic",
+      "fontFamily": "Lora, Georgia, serif"
+    }
+  },
+  "typography": {
+    "wordmark": {
+      "fontFamily": "Lato, 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif",
+      "fontWeight": 500,
+      "letterSpacing": "-0.02em",
+      "notes": "Lato Medium. Available on Google Fonts."
+    },
+    "tagline": {
+      "fontFamily": "Lora, Georgia, 'Times New Roman', serif",
+      "fontStyle": "italic",
+      "fontWeight": 400,
+      "notes": "Lora Italic. Available on Google Fonts."
+    }
+  }
+}

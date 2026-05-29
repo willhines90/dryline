@@ -25,7 +25,7 @@ import {
 import { ReasoningTrace } from "@/components/dryline/reasoning-trace";
 import { SynthesisCard } from "@/components/dryline/synthesis-card";
 import { ActionsTab, ActionCard } from "@/components/dryline/actions-tab";
-import { DrylineLogo } from "@/components/dryline/dryline-logo";
+import { DrylineMark } from "@/components/dryline/dryline-mark";
 import { DrylineScore } from "@/components/dryline/dryline-score";
 import { SearchBar } from "@/components/dryline/search-bar";
 import { AboutModal } from "@/components/dryline/about-modal";
@@ -89,16 +89,16 @@ function PageShell({ locations }: { locations: DemoLocationWithCoords[] }) {
               className="flex items-center gap-2.5 no-underline shrink-0 group min-w-0"
               aria-label="Dryline — home"
             >
-              <DrylineLogo size={28} variant="front" />
-              <span className="font-sans text-[20px] sm:text-[22px] font-semibold tracking-[-0.025em] text-ink leading-none">
+              <DrylineMark size={26} className="text-dryline shrink-0" />
+              <span className="font-wordmark text-[20px] sm:text-[22px] tracking-[-0.02em] text-dryline leading-none">
                 Dryline
               </span>
               <span
                 aria-hidden
                 className="hidden xl:inline-block h-5 w-px bg-ink/15 ml-1.5"
               />
-              <span className="hidden xl:inline font-serif italic text-[13.5px] text-tideline ml-2.5 truncate max-w-[320px]">
-                Investigate Texas water at any address.
+              <span className="hidden xl:inline font-tagline italic text-[13.5px] text-tideline ml-2.5 truncate max-w-[440px]">
+                Follow the water at any Texas address — every claim cited.
               </span>
             </Link>
             <div className="flex items-center gap-1.5 shrink-0 lg:ml-auto">

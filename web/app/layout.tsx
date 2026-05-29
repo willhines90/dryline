@@ -1,14 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Geist, Geist_Mono } from "next/font/google";
+import { Newsreader, Geist, Geist_Mono, Lato, Lora } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
 const GA_MEASUREMENT_ID = "G-M4P8YR9XSZ";
 
-// Newsreader (editorial serif) + Geist (sans) + Geist Mono (data / trace).
-// Loaded once at the layout level and exposed via CSS variables so
-// Tailwind utilities can reach them. The brand wordmark uses Geist
-// at 600 — clean modern sans, no display-serif theatrics.
+// Newsreader (editorial serif) + Geist (sans) + Geist Mono (data / trace)
+// drive the in-app UI. Lato + Lora carry the brand lockup in the chrome:
+// Lato for the "Dryline" wordmark, Lora italic for the tagline. All are
+// loaded once here and exposed via CSS variables so Tailwind can reach
+// them. (Google's Lato has no true 500 weight — 400 is what the brand
+// wordmark SVG renders anyway.)
 const newsreader = Newsreader({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
@@ -28,6 +30,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
   variable: "--font-geist-mono",
+  display: "swap",
+});
+
+const lato = Lato({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-lato",
+  display: "swap",
+});
+
+const lora = Lora({
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["italic"],
+  variable: "--font-lora",
   display: "swap",
 });
 
@@ -157,6 +174,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Brand slate for the mobile browser chrome (address bar / PWA bar).
+  themeColor: "#1E293B",
 };
 
 export default function RootLayout({
@@ -168,7 +187,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${newsreader.variable} ${geist.variable} ${geistMono.variable}`}
+      className={`${newsreader.variable} ${geist.variable} ${geistMono.variable} ${lato.variable} ${lora.variable}`}
     >
       <body className="font-sans">
         {/* schema.org structured data — surfaces Dryline in Google Knowledge

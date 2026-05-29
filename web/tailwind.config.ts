@@ -71,6 +71,11 @@ const config: Config = {
           soft: "#dde6e9",
         },
 
+        // Brand mark + wordmark color (slate-800). Used only for the
+        // Dryline lockup in the chrome; the map/cards keep the water
+        // palette below. Source: public/brand/colors.json.
+        dryline: "#1E293B",
+
         // Water family — primary
         aquifer: {
           DEFAULT: "#0d3b6f", // deep ocean blue, marker live
@@ -129,6 +134,10 @@ const config: Config = {
         sans: ["var(--font-geist)", "ui-sans-serif", "system-ui", "sans-serif"],
         serif: ["var(--font-newsreader)", "Newsreader", "Georgia", "serif"],
         mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
+        // Brand lockup: Lato wordmark, Lora-italic tagline. Wired in
+        // app/layout.tsx via next/font.
+        wordmark: ["var(--font-lato)", "Lato", "Helvetica Neue", "system-ui", "sans-serif"],
+        tagline: ["var(--font-lora)", "Lora", "Georgia", "serif"],
       },
       borderRadius: {
         // Design uses square corners by default; keep the shadcn radius vars

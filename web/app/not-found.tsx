@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DrylineLogo } from "@/components/dryline/dryline-logo";
+import { DrylineMark } from "@/components/dryline/dryline-mark";
 
 export const metadata: Metadata = {
   title: "Not found · Dryline",
@@ -15,8 +15,8 @@ export default function NotFound() {
       <header className="border-b border-rule bg-paper-deep">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-baseline justify-between gap-4">
           <Link href="/" className="flex items-center gap-2.5 no-underline" aria-label="Dryline — home">
-            <DrylineLogo size={26} variant="front" />
-            <span className="font-sans text-[20px] font-semibold tracking-[-0.025em] text-ink leading-none">
+            <DrylineMark size={24} className="text-dryline shrink-0" />
+            <span className="font-wordmark text-[20px] tracking-[-0.02em] text-dryline leading-none">
               Dryline
             </span>
           </Link>

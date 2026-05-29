@@ -8,7 +8,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DrylineLogo } from "@/components/dryline/dryline-logo";
+import { DrylineMark } from "@/components/dryline/dryline-mark";
 
 export const metadata: Metadata = {
   title: "Dryline Score · Methodology",
@@ -205,8 +205,8 @@ export default function MethodologyPage() {
       <header className="border-b border-rule bg-background">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-baseline justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 no-underline">
-            <DrylineLogo size={20} />
-            <span className="font-serif text-[20px] font-semibold tracking-[-0.012em] text-ink">
+            <DrylineMark size={20} className="text-dryline shrink-0" />
+            <span className="font-wordmark text-[20px] tracking-[-0.02em] text-dryline">
               Dryline
             </span>
           </Link>

@@ -168,7 +168,6 @@ dryline/
 │   ├── components/dryline/  Cinematic flow components.
 │   └── lib/              Wire-type mirror, Markdown renderer, utils.
 ├── fixtures/             Canonical demo addresses.
-├── PROPOSAL.md           Project thesis: scope, demo lineup, what not to build.
 ├── LANDSCAPE.md          Competitive analysis: where Dryline sits, what's missing in market.
 └── EXTENSIONS.md         Post-hackathon roadmap.
 ```
@@ -255,7 +254,6 @@ pnpm --filter @dryline/mcp exec \
 
 ## Documents
 
-- [PROPOSAL.md](./PROPOSAL.md) — full project thesis
 - [LANDSCAPE.md](./LANDSCAPE.md) — competitive analysis & gap framing
 - [EXTENSIONS.md](./EXTENSIONS.md) — post-hackathon roadmap
 
@@ -263,4 +261,4 @@ pnpm --filter @dryline/mcp exec \
 
 ## License
 
-MIT. All public data is cited; we don't redistribute proprietary datasets.
+MIT — see [LICENSE](./LICENSE). All public data is cited; we don't redistribute proprietary datasets.

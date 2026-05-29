@@ -45,4 +45,5 @@ coverage/
 
 # Local-only drafts and internal process docs (kept out of the repo)
 LINKEDIN.md
+PROPOSAL.md
 docs/internal/

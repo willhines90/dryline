@@ -205,7 +205,6 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           <div className="flex flex-wrap gap-2 pt-3 border-t border-dashed border-rule">
             <ExternalLink href="/methodology">→ Score methodology</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline">→ GitHub</ExternalLink>
-            <ExternalLink href="https://github.com/willhines90/dryline/blob/main/PROPOSAL.md">→ Proposal</ExternalLink>
             <ExternalLink href="https://github.com/willhines90/dryline/blob/main/skill/SKILL.md">→ Agent skill</ExternalLink>
           </div>
 

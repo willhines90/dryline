@@ -595,6 +595,7 @@ async function runInvestigation(
   mode: Mode,
   headlineStory: string | null,
   humanScaleHook: string | null,
+  coords: { lat: number; lng: number } | null,
   writer: StreamWriter,
 ): Promise<InvestigationCompletion> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -608,7 +609,16 @@ async function runInvestigation(
   const collected: Array<{ name: string; result: ToolResult<unknown> }> = [];
 
   // Phase 1: resolve_location must succeed before the others can run.
-  const resolved = await dispatchAndEmit("resolve_location", { address }, writer, collected);
+  // When the caller supplies coordinates (a map gauge / reservoir, or a
+  // geocoder-resolved suggestion), pass them so resolve_location skips
+  // forward-geocoding — the name alone (e.g. "Guadalupe Rv at Victoria,
+  // TX") often won't geocode, even though the point is known.
+  const resolved = await dispatchAndEmit(
+    "resolve_location",
+    coords ? { address, lat: coords.lat, lng: coords.lng } : { address },
+    writer,
+    collected,
+  );
   const resolvedData = resolved.toolResult.data as
     | { lat: number; lng: number; countyFips: string }
     | null;
@@ -807,12 +817,15 @@ export async function POST(req: Request): Promise<Response> {
   let mode: Mode = "personal";
   let headlineStory: string | null = null;
   let humanScaleHook: string | null = null;
+  let coords: { lat: number; lng: number } | null = null;
   try {
     const body = (await req.json()) as {
       address?: unknown;
       mode?: unknown;
       headlineStory?: unknown;
       humanScaleHook?: unknown;
+      lat?: unknown;
+      lng?: unknown;
     };
     if (typeof body.address !== "string" || body.address.trim().length === 0) {
       return new Response(
@@ -832,6 +845,14 @@ export async function POST(req: Request): Promise<Response> {
     if (typeof body.humanScaleHook === "string" && body.humanScaleHook.trim().length > 0) {
       humanScaleHook = body.humanScaleHook.trim();
     }
+    if (
+      typeof body.lat === "number" &&
+      typeof body.lng === "number" &&
+      Number.isFinite(body.lat) &&
+      Number.isFinite(body.lng)
+    ) {
+      coords = { lat: body.lat, lng: body.lng };
+    }
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -841,7 +862,8 @@ export async function POST(req: Request): Promise<Response> {
 
   const url = new URL(req.url);
   const useAgentic = url.searchParams.get("agent") === "1";
-  const cacheKey = `${useAgentic ? "agent" : "det"}::${mode}::${address.toLowerCase()}`;
+  const coordKey = coords ? `@${coords.lat.toFixed(4)},${coords.lng.toFixed(4)}` : "";
+  const cacheKey = `${useAgentic ? "agent" : "det"}::${mode}::${address.toLowerCase()}${coordKey}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && cached.expires > now) {
@@ -867,7 +889,7 @@ export async function POST(req: Request): Promise<Response> {
       try {
         const completion = useAgentic
           ? await runAgentic(address, mode, headlineStory, writer)
-          : await runInvestigation(address, mode, headlineStory, humanScaleHook, writer);
+          : await runInvestigation(address, mode, headlineStory, humanScaleHook, coords, writer);
         okToCache = completion.cacheable;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

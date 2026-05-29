@@ -19,6 +19,13 @@ import { source, freshnessCaveat, errorCaveat, boundsCaveat } from "../lib/sourc
 
 const inputSchema = z.object({
   address: z.string().min(3).describe("Free-text Texas address. e.g. '123 RR 12, Wimberley, TX 78676'"),
+  lat: z
+    .number()
+    .optional()
+    .describe(
+      "Known latitude. When provided together with lng, forward-geocoding is skipped and the county is resolved straight from the coordinates. Use for map features (stream gauges, reservoirs) or geocoder-resolved suggestions whose name may not geocode.",
+    ),
+  lng: z.number().optional().describe("Known longitude. See lat."),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -104,54 +111,79 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
   description:
     "Resolve a Texas address to lat/lng and enrich with county FIPS, watershed (HUC-12), groundwater conservation district, and public water system ID. Foundation for all other tools.",
   inputSchema,
-  run: async ({ address }) => {
+  run: async ({ address, lat: providedLat, lng: providedLng }) => {
     // Build sources as we go so partial-failure paths still cite what worked.
     const sources: ReturnType<typeof source>[] = [];
+    const haveCoords =
+      typeof providedLat === "number" &&
+      typeof providedLng === "number" &&
+      Number.isFinite(providedLat) &&
+      Number.isFinite(providedLng);
     try {
-      // 1. Nominatim geocoding (one-shot; rate-limit: 1 req/s, set UA from env).
-      const ua = process.env.NOMINATIM_USER_AGENT ?? "Dryline/0.0.1";
-      const nominatimUrl = new URL("https://nominatim.openstreetmap.org/search");
-      nominatimUrl.searchParams.set("q", address);
-      nominatimUrl.searchParams.set("format", "jsonv2");
-      nominatimUrl.searchParams.set("addressdetails", "1");
-      nominatimUrl.searchParams.set("countrycodes", "us");
-      nominatimUrl.searchParams.set("limit", "1");
+      let lat: number;
+      let lng: number;
+      let formattedAddress: string;
+      // Nominatim's county field, used as a Census fallback below. Only
+      // populated on the forward-geocode path.
+      let nominatimCounty: string | undefined;
 
-      // Defensive 8s timeout — Nominatim's free tier occasionally hangs
-      // for 30+s under load, which can drag a whole investigation to the
-      // edge of the function timeout. Fail fast instead.
-      const geoRes = await fetch(nominatimUrl, {
-        headers: { "User-Agent": ua },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!geoRes.ok) throw new Error(`Nominatim ${geoRes.status}`);
-      sources.push(
-        source({ title: "Nominatim — geocoding", url: nominatimUrl.toString(), publisher: "OpenStreetMap" }),
-      );
-      const geoJson = (await geoRes.json()) as Array<{
-        lat: string;
-        lon: string;
-        display_name: string;
-        address?: { state?: string; county?: string };
-      }>;
-      const top = geoJson[0];
-      if (!top) {
-        return {
-          data: null,
-          caveats: [{ severity: "error", category: "inference", message: "Geocoder returned no results for that address." }],
-          sources,
-        };
-      }
-      if (top.address?.state !== "Texas") {
-        return {
-          data: null,
-          caveats: [{ severity: "error", category: "bounds", message: "Address resolved outside Texas. Dryline only covers TX." }],
-          sources,
-        };
-      }
+      if (haveCoords) {
+        // Coordinates already known (a map gauge / reservoir, or a
+        // geocoder-resolved suggestion). Skip Nominatim forward-geocoding
+        // — for inputs like "Guadalupe Rv at Victoria, TX" it returns no
+        // results — and resolve the county straight from the point. TX
+        // bounds are enforced below via the county FIPS (Texas == "48…").
+        lat = providedLat as number;
+        lng = providedLng as number;
+        formattedAddress = address;
+      } else {
+        // 1. Nominatim geocoding (one-shot; rate-limit: 1 req/s, set UA from env).
+        const ua = process.env.NOMINATIM_USER_AGENT ?? "Dryline/0.0.1";
+        const nominatimUrl = new URL("https://nominatim.openstreetmap.org/search");
+        nominatimUrl.searchParams.set("q", address);
+        nominatimUrl.searchParams.set("format", "jsonv2");
+        nominatimUrl.searchParams.set("addressdetails", "1");
+        nominatimUrl.searchParams.set("countrycodes", "us");
+        nominatimUrl.searchParams.set("limit", "1");
 
-      const lat = Number(top.lat);
-      const lng = Number(top.lon);
+        // Defensive 8s timeout — Nominatim's free tier occasionally hangs
+        // for 30+s under load, which can drag a whole investigation to the
+        // edge of the function timeout. Fail fast instead.
+        const geoRes = await fetch(nominatimUrl, {
+          headers: { "User-Agent": ua },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!geoRes.ok) throw new Error(`Nominatim ${geoRes.status}`);
+        sources.push(
+          source({ title: "Nominatim — geocoding", url: nominatimUrl.toString(), publisher: "OpenStreetMap" }),
+        );
+        const geoJson = (await geoRes.json()) as Array<{
+          lat: string;
+          lon: string;
+          display_name: string;
+          address?: { state?: string; county?: string };
+        }>;
+        const top = geoJson[0];
+        if (!top) {
+          return {
+            data: null,
+            caveats: [{ severity: "error", category: "inference", message: "Geocoder returned no results for that address." }],
+            sources,
+          };
+        }
+        if (top.address?.state !== "Texas") {
+          return {
+            data: null,
+            caveats: [{ severity: "error", category: "bounds", message: "Address resolved outside Texas. Dryline only covers TX." }],
+            sources,
+          };
+        }
+
+        lat = Number(top.lat);
+        lng = Number(top.lon);
+        formattedAddress = top.display_name;
+        nominatimCounty = top.address?.county;
+      }
 
       // 2. Census Geocoder for county FIPS (Nominatim doesn't always include
       // it cleanly). 3-retry exponential backoff; fall back to a TX-only
@@ -179,16 +211,16 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
             publisher: "U.S. Census Bureau",
           }),
         );
-      } else if (top.address?.county) {
+      } else if (nominatimCounty) {
         // Fallback: Nominatim already gave us the county name; map TX → FIPS.
-        const key = countyKey(top.address.county);
+        const key = countyKey(nominatimCounty);
         const fips = TX_COUNTY_FIPS[key];
         if (fips) {
           countyFips = fips;
-          countyName = top.address.county.replace(/ County$/i, "");
+          countyName = nominatimCounty.replace(/ County$/i, "");
           censusCaveats.push(
             boundsCaveat(
-              `Census Geocoder unreachable; resolved county FIPS via Nominatim's '${top.address.county}' field against Dryline's Texas county table.`,
+              `Census Geocoder unreachable; resolved county FIPS via Nominatim's '${nominatimCounty}' field against Dryline's Texas county table.`,
               "warning",
             ),
           );
@@ -197,11 +229,20 @@ export const resolveLocation: DrylineTool<Input, ResolvedLocation> = {
       if (!countyFips || !countyName) {
         throw new Error("Could not resolve county FIPS via Census or Nominatim fallback.");
       }
+      // When coordinates were supplied we skipped Nominatim's state check,
+      // so enforce Texas here: every Texas county FIPS begins with "48".
+      if (haveCoords && !countyFips.startsWith("48")) {
+        return {
+          data: null,
+          caveats: [{ severity: "error", category: "bounds", message: "Coordinates resolved outside Texas. Dryline only covers TX." }],
+          sources,
+        };
+      }
 
       const data: ResolvedLocation = {
         lat,
         lng,
-        formattedAddress: top.display_name,
+        formattedAddress,
         countyFips,
         countyName,
         stateAbbr: "TX",

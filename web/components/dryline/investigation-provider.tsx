@@ -299,6 +299,12 @@ function useSlotState(getAgentic: () => boolean): {
             mode: effectiveMode,
             headlineStory: location.headlineStory,
             humanScaleHook: location.humanScaleHook,
+            // When we already know the exact point (map gauge / reservoir,
+            // or a geocoder-resolved suggestion), send it so the server
+            // skips forward-geocoding a name that may not resolve.
+            ...(location.approxLatLng
+              ? { lat: location.approxLatLng.lat, lng: location.approxLatLng.lng }
+              : {}),
           }),
           signal: ac.signal,
         });

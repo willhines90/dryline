@@ -118,7 +118,12 @@ async function fetchCensus(q: string): Promise<Suggestion[]> {
   const url = new URL(
     "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress",
   );
-  url.searchParams.set("address", q);
+  // A bare street address ("14106 Heatherhill Pl") won't geocode — Census
+  // needs a city or state to disambiguate the street name. If the query
+  // doesn't already name Texas, append it; Dryline is TX-only, so this only
+  // sharpens matching, and the state filter below still applies.
+  const addr = /\b(tx|texas)\b/i.test(q) ? q : `${q}, TX`;
+  url.searchParams.set("address", addr);
   url.searchParams.set("benchmark", "Public_AR_Current");
   url.searchParams.set("vintage", "Current_Current");
   url.searchParams.set("format", "json");

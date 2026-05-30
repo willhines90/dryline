@@ -446,6 +446,7 @@ async function runAgentic(
   address: string,
   mode: Mode,
   headlineStory: string | null,
+  coords: { lat: number; lng: number } | null,
   writer: StreamWriter,
 ): Promise<InvestigationCompletion> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -520,7 +521,15 @@ async function runAgentic(
 
       const dispatched = await Promise.all(
         callsForThisIter.map(async (call) => {
-          const result = await dispatchTool(call.name!, call.args ?? {});
+          // When the caller supplied exact coordinates (gauge / reservoir /
+          // resolved suggestion), fold them into the model's resolve_location
+          // call so it skips forward-geocoding a name that may not resolve —
+          // regardless of whether the model passed lat/lng itself.
+          const args =
+            call.name === "resolve_location" && coords
+              ? { ...(call.args ?? {}), lat: coords.lat, lng: coords.lng }
+              : call.args ?? {};
+          const result = await dispatchTool(call.name!, args);
           collected.push(result.toolResult);
           writer.emit("tool_result", {
             toolName: call.name,
@@ -888,7 +897,7 @@ export async function POST(req: Request): Promise<Response> {
       let okToCache = true;
       try {
         const completion = useAgentic
-          ? await runAgentic(address, mode, headlineStory, writer)
+          ? await runAgentic(address, mode, headlineStory, coords, writer)
           : await runInvestigation(address, mode, headlineStory, humanScaleHook, coords, writer);
         okToCache = completion.cacheable;
       } catch (err) {

@@ -18,6 +18,24 @@ Forecasting (Aquifer Forecaster, Resilience Score) and adjacent-domain expansion
 
 ---
 
+## Build log & next up (2026-05-30)
+
+Dryline is launched and public. Since the hackathon build, shipped to `main`:
+
+- **9th tool — `get_water_quality`** (USGS NWIS in-situ sensors: specific conductance, nitrate, DO, pH, temperature, turbidity), wired into both the deterministic and agentic fan-out.
+- **Coordinate-aware resolution** — `resolve_location` accepts `lat`/`lng`, so map features investigate from their exact point. Stream gauges, reservoirs, **and river basins** are now investigable; bare street addresses ("14106 Heatherhill Pl") resolve by defaulting the geocoder to Texas.
+- **Repositioning** — guiding docs, README, and product copy moved from "hackathon demo" to "launched product," with the **civic wedge** (journalists + advocacy first; residents the free funnel; water-sector B2B later) as the focus. See `CLAUDE.md` → "Focus now."
+- **Privacy-safe usage instrumentation** — anonymous events (`investigate_started {mode, kind, region}`, `action_drafted` / `action_opened {kind}`, `investigate_completed`). The searched address is never sent to analytics.
+- **Brand** — slate mark + Lato wordmark in the chrome, favicons / PWA manifest, new OG image; aquifer + river popup links repaired (TWDB pages / disambiguated Wikipedia titles).
+
+**Immediate next up (deferred, decisions noted):**
+
+1. **Email-capture CTA — the entry point for P3 (Per-Address Newsletter).** No capture UI exists yet. For the civic wedge this is the strongest near-term PMF/partnership instrument (a "Get the weekly Texas water briefing" capture). *Decision needed (see Open Questions #5): where do emails land* — a form service (Buttondown / ConvertKit / Formspree) or a serverless route → sheet/DB, given the no-accounts/no-DB posture.
+2. **Water Quality Portal (discrete lab samples).** `get_water_quality` currently covers continuous NWIS sensors only — live and fast, but spatially sparse. Discrete WQP samples (nitrate grab samples, E. coli, metals) are richer but slow and months-to-years old; add as a second source or a `?deep=1` path, never in the hot fan-out.
+3. *(Optional)* scrub `PROPOSAL.md` from git history — it's removed from the working tree but remains in past commits.
+
+---
+
 ## Rubric
 
 Six criteria, each scored 1–5 (5 = strongest). Weights reflect post-hackathon priorities: demo-able first (because that's what wins users and follow-on funding), but with real revenue and moat weight so we're not just chasing demo gold.
@@ -479,8 +497,9 @@ Only after the water wedge is firmly held. Expand to air, wildfire, heat. The pl
 
 1. **Vision provider.** Claude vs. Gemini for the segmentation model — preference, or test both?
 2. **Score branding.** Is it the "Dryline Score" or does it want a separate brand (the way Flood Factor is its own thing alongside First Street)? Naming materially affects distribution strategy.
-3. **B2B vs. consumer first.** Sprint sequencing assumes consumer-first via Resilience Plan + Resilience Score + Newsletter. If the immediate post-hackathon priority is investor traction with a B2B story, Portfolio Mode jumps the queue.
+3. **B2B vs. consumer first.** *Resolved 2026-05-30:* lead with the **civic wedge** — journalists + advocacy orgs — with residents as the free public funnel and water-sector B2B (GCDs / authorities / utilities) as the later monetization path. Portfolio Mode / B2B still jumps the queue if investor traction becomes the priority.
 4. **Permit Watcher monetization.** Free tier (single watershed) → paid tier (unlimited + faster scrape SLA), or fully free as civic infrastructure with grant funding?
+5. **Newsletter email sink.** The weekly-briefing capture (P3 entry point) needs somewhere to store emails without standing up accounts/a DB. Form service (Buttondown / ConvertKit / Formspree) for fastest path, or a thin serverless route → managed store? This gates building the CTA.
 
 ---
 

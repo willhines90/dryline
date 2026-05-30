@@ -2557,12 +2557,14 @@ export function TexasMap({
           pinned: boolean,
         ): string => {
           const p = f.properties as { name?: string; huc4?: string; states?: string };
-          const wbdUrl = p.huc4 ? `https://water.usgs.gov/wsc/cat/${p.huc4}.html` : null;
           return `<div style="padding:8px 11px;max-width:260px">
             <div style="font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#4a6c78">River basin · HUC ${escape(p.huc4 ?? "—")}</div>
             <div style="font-family:'Newsreader',serif;font-size:14px;color:#07171f;margin-top:2px;line-height:1.2">${escape(p.name ?? "—")}</div>
             ${p.states ? `<div style="font-family:'Geist Mono',monospace;font-size:9.5px;color:#4a6c78;margin-top:3px">States: ${escape(p.states)}</div>` : ""}
-            ${pinned && wbdUrl ? `<a href="${wbdUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:6px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#0d3b6f;text-decoration:underline;text-underline-offset:2px">USGS WBD ↗</a>` : ""}
+            ${pinned ? `<div style="font-family:'Newsreader',serif;font-style:italic;font-size:12px;color:#4a6c78;line-height:1.4;margin-top:6px">Investigate the water situation at this point in the basin — drought, aquifer, reservoirs, dischargers, and gauges.</div>
+            <div style="margin-top:10px;border-top:1px solid #c8d6da;padding-top:8px">
+              <button data-dryline-investigate style="cursor:pointer;background:#0d3b6f;color:#fff;border:none;padding:6px 10px;font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;border-radius:2px">Investigate here ↗</button>
+            </div>` : ""}
           </div>`;
         };
         const ctl = setupLayerPopup(map, ml, {
@@ -2572,6 +2574,25 @@ export function TexasMap({
           pinnedHtml: (f) => basinRender(f, true),
           yieldToLayers: [...POINT_LAYER_PRIORITY],
           className: "dryline-basin-popup",
+          onInvestigate: (f, lngLat) => {
+            const p = f.properties as { name?: string; huc4?: string };
+            const baseName = (p.name ?? "River").trim();
+            // A basin click has no street/city — the click point drives the
+            // investigation (approxLatLng below), and resolve_location uses
+            // those coordinates directly. The basin name is context only.
+            const synth: MapLocation = {
+              id: `basin:${p.huc4 ?? `${lngLat.lat.toFixed(4)},${lngLat.lng.toFixed(4)}`}`,
+              label: `${baseName} basin`,
+              city: `${baseName} basin`,
+              county: "",
+              region: `River basin · HUC ${p.huc4 ?? "—"}`,
+              mode: "transparency",
+              headlineStory: `Investigation at a point in the ${baseName} basin.`,
+              approxLatLng: { lat: lngLat.lat, lng: lngLat.lng },
+              live: true,
+            };
+            onLocationClickRef.current?.(synth);
+          },
         });
         (map as MapInstance & { __basinPopupCtl?: LayerPopupController }).__basinPopupCtl = ctl;
         raisePointLayers(map);

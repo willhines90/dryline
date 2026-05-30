@@ -341,7 +341,7 @@ export function SearchBar({ staged, onPick, activeLabel, className }: SearchBarP
               </span>
             </div>
             <div className="text-[11.5px] text-tideline mt-0.5">
-              Resolves the address via Nominatim + Census, then fans out all 8 tools against real public APIs. Tip: include city + county for the most reliable resolution.
+              Resolves the address via Nominatim + Census, then fans out all 9 tools against real public APIs. Tip: include city + county for the most reliable resolution.
             </div>
           </button>
           <div className="px-3 py-2 font-mono text-[9.5px] tracking-[0.16em] text-tideline border-t border-rule">

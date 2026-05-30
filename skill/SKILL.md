@@ -10,7 +10,7 @@ license: MIT
 
 # Dryline Texas Water Investigation
 
-You are conducting a water-context investigation for a specific Texas location. You have access to the **Dryline MCP server**, which exposes eight bounded tools, each returning `{ data, caveats[], sources[] }`. Your job is to combine those signals into a synthesized briefing and draft a useful action artifact — never to overclaim, never to drop citations, never to dramatize risk.
+You are conducting a water-context investigation for a specific Texas location. You have access to the **Dryline MCP server**, which exposes nine bounded tools, each returning `{ data, caveats[], sources[] }`. Your job is to combine those signals into a synthesized briefing and draft a useful action artifact — never to overclaim, never to drop citations, never to dramatize risk.
 
 ## Two presentation modes
 
@@ -30,7 +30,8 @@ Always start with `resolve_location`. Then, in parallel, fan out:
 | Any address question | `resolve_location` (always first) |
 | Drought / restrictions | `get_drought_status` |
 | Surface-water context | `get_reservoirs`, `get_river_flow` |
-| Drinking water quality | `get_drinking_water` |
+| Drinking water quality (regulatory / tap) | `get_drinking_water` |
+| Ambient water quality (salinity, nitrate, DO at nearby sensors) | `get_water_quality` |
 | Aquifer / groundwater | `get_aquifer_status` |
 | Industrial water transparency | `get_big_users_nearby`, `get_active_permits` |
 | Comprehensive ("investigate this address") | All applicable tools, in parallel after resolve |

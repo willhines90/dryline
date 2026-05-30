@@ -49,7 +49,7 @@ import { computeDrylineScore } from "@/lib/dryline-score";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Vercel's default function timeout is 10s (Hobby) / 60s (Pro). The
-// deterministic fan-out runs ~8 tools in parallel and then synthesizes
+// deterministic fan-out runs ~9 tools in parallel and then synthesizes
 // via Gemini; observed prod wall-time hits 70-90s when Nominatim is
 // throttling or EPA ECHO is slow. Bump the ceiling to 120s so the
 // stream actually completes instead of being chopped mid-synthesis.
@@ -70,6 +70,7 @@ const PUBLISHED_TOOL_NAMES = new Set([
   "get_aquifer_status",
   "get_river_flow",
   "get_active_permits",
+  "get_water_quality",
 ]);
 
 interface CacheEntry {
@@ -285,6 +286,24 @@ function summarizeTool(name: string, result: ToolResult<unknown>): string {
       const gen = list.filter((p) => p.permitCategory === "general_permit").length;
       return `${list.length} effective permits · ${ind} individual · ${gen} general`;
     }
+    case "get_water_quality": {
+      const r = d as {
+        sites?: Array<{
+          siteName: string;
+          distanceMi: number;
+          measurements: Array<{ parameter: string; value: number | null; unit: string }>;
+        }>;
+      };
+      const list = r.sites ?? [];
+      const nearest = list[0];
+      if (!nearest) return "no nearby water-quality sensors";
+      const reads = nearest.measurements
+        .filter((m) => m.value != null)
+        .slice(0, 3)
+        .map((m) => `${m.parameter} ${m.value}${m.unit ? ` ${m.unit}` : ""}`)
+        .join(", ");
+      return `${nearest.siteName} (${nearest.distanceMi}mi): ${reads}${list.length > 1 ? `; +${list.length - 1} more sites` : ""}`;
+    }
     default:
       return "tool returned";
   }
@@ -399,7 +418,7 @@ ${
   headlineStory
     ? `Background context the user came in with (treat as the framing, land it concretely in the data):\n> ${headlineStory}\n\n`
     : ""
-}You have access to eight water-data tools. ALWAYS call resolve_location first to get lat/lng + countyFips for downstream tools. Then choose tools based on what the address and the framing call for; you do not have to call all of them. Aim to finish in 6 or fewer tool calls.
+}You have access to nine water-data tools. ALWAYS call resolve_location first to get lat/lng + countyFips for downstream tools. Then choose tools based on what the address and the framing call for; you do not have to call all of them. Aim to finish in 7 or fewer tool calls.
 
 When you have enough data, emit your final assistant text in EXACTLY this structure:
 
@@ -679,6 +698,12 @@ async function runInvestigation(
         writer,
         collected,
       ),
+      dispatchAndEmit(
+        "get_water_quality",
+        { lat, lng, radiusMi: 25, limit: 5 },
+        writer,
+        collected,
+      ),
     ]);
   }
 
@@ -695,6 +720,7 @@ async function runInvestigation(
     "get_aquifer_status",
     "get_river_flow",
     "get_active_permits",
+    "get_water_quality",
   ];
   const labeledResults = PROMPT_ORDER.flatMap((name) => {
     const m = collected.find((c) => c.name === name);

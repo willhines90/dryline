@@ -12,7 +12,7 @@ When making product decisions (new tools, new modes, scope changes, copy choices
 
 ## Repo layout
 
-- `mcp/` — the MCP server: 8 bounded tools, all returning `{ data, caveats[], sources[] }`. DuckDB snapshot loader for groundwater wells, parcels, floodplain.
+- `mcp/` — the MCP server: 9 bounded tools, all returning `{ data, caveats[], sources[] }`. DuckDB snapshot loader for groundwater wells, parcels, floodplain.
 - `skill/` — agent skill (`/skill/SKILL.md`) that teaches *any* agent how to use the MCP responsibly. Worked examples and reference docs in `skill/references/`.
 - `web/` — Next.js + MapLibre + shadcn/ui investigation surface: visible reasoning trace, cinematic demo sequence (address entry → map fly-to → trace streams → cards populate → tension flagged → synthesis → drafted artifact), mode toggle (Personal ↔ Transparency), Actions panel (drafted artifacts; hero is the public-comment draft).
 - `fixtures/` — canonical demo inputs. The live-demo trio (Wimberley → Taylor/Samsung → Fort Stockton/Comanche Springs) must run cleanly in three minutes; see `fixtures/demo-addresses.json` for the full seven.
@@ -40,18 +40,19 @@ type ToolResult<T> = {
 
 The wire types live in `mcp/src/types.ts`. The web app mirrors them by hand at `web/lib/types.ts` (clean runtime boundary; web does not import from `@dryline/mcp`). When `mcp/src/types.ts` changes, `web/lib/types.ts` must change in lockstep — typecheck-in-isolation will not catch drift.
 
-## The eight MCP tools (priority order)
+## The nine MCP tools (priority order)
 
-1. **`resolve_location(address)`** — lat/lng + county + watershed (HUC-12) + GCD + PWS ID. Foundation for everything else.
+1. **`resolve_location(address, lat?, lng?)`** — lat/lng + county + watershed (HUC-12) + GCD + PWS ID. Foundation for everything else. Pass `lat`/`lng` to skip forward-geocoding (map features, resolved suggestions).
 2. **`get_drought_status(address)`** — U.S. Drought Monitor REST API.
 3. **`get_reservoirs(address, radius_mi)`** — TWDB Water Data for Texas REST.
 4. **`get_drinking_water(pws_or_address)`** — EPA SDWIS via ECHO REST API.
 5. **`get_big_users_nearby(address, radius_mi)`** — EPA ECHO regulated facilities (TCEQ proxy).
 6. **`get_aquifer_status(address)`** — TWDB GWDB snapshot in DuckDB.
 7. **`get_active_permits(address, radius_mi, since)`** — TCEQ permit data, ECHO proxy where available.
-8. **`get_river_flow(address)`** — USGS NWIS REST API.
+8. **`get_river_flow(address)`** — USGS NWIS REST API (discharge, cfs).
+9. **`get_water_quality(lat, lng, radius_mi)`** — USGS NWIS in-situ water-quality sensors (specific conductance, nitrate, DO, pH, temperature, turbidity). Supply-relevant signals are conductance (salinity) + nitrate. Continuous sensors only; discrete lab samples (Water Quality Portal) are a future extension.
 
-Tools 1–5 are the **minimum viable winning version** (see PROPOSAL.md fallback section). Build them first, end-to-end, with real source URLs and live API calls. Tools 6–8 ship if time allows.
+Tools 1–5 are the **minimum viable winning version** (see PROPOSAL.md fallback section). Build them first, end-to-end, with real source URLs and live API calls. Tools 6–9 ship if time allows.
 
 ## MCP conventions
 
@@ -95,7 +96,7 @@ Resist scope creep on examples — three is enough.
 ## What NOT to spend time on (from PROPOSAL.md)
 
 - Don't perfect GIS layer styling — reservoir blue is enough.
-- Don't integrate every dataset — eight tools is the ceiling.
+- Don't integrate every dataset — nine tools is the ceiling (`get_water_quality` was added post-MVP; resist a tenth).
 - Don't build a chat interface.
 - Don't build a settings page.
 - Don't gold-plate typography — default shadcn is fine.

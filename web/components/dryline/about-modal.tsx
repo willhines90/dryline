@@ -182,7 +182,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           <div>
             <div className="dryline-label mb-2">Why this works</div>
             <p className="font-serif text-[15px] leading-relaxed text-ink/85">
-              Eight bounded <Acronym>MCP</Acronym> tools, each returning <code className="font-mono text-[12.5px] bg-paper-deep px-1">{"{ data, caveats[], sources[] }"}</code>.
+              Nine bounded <Acronym>MCP</Acronym> tools, each returning <code className="font-mono text-[12.5px] bg-paper-deep px-1">{"{ data, caveats[], sources[] }"}</code>.
               Every claim cites a public URL with a retrievedAt timestamp. The synthesis is
               mode-aware. Civic-action artifacts (public comments, <Acronym>GCD</Acronym> letters, <Acronym>PIA</Acronym>{" "}
               requests) include real <Acronym>NPDES</Acronym> permit IDs — no invented docket

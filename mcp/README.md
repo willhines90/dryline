@@ -1,6 +1,6 @@
 # @dryline/mcp
 
-The Model Context Protocol server for Dryline. Exposes 8 bounded tools that fetch and summarize Texas water data, all returning a strict `{ data, caveats[], sources[] }` shape.
+The Model Context Protocol server for Dryline. Exposes 9 bounded tools that fetch and summarize Texas water data, all returning a strict `{ data, caveats[], sources[] }` shape.
 
 > Read `../CLAUDE.md` and `../PROPOSAL.md` before making non-trivial changes here.
 
@@ -13,7 +13,8 @@ The Model Context Protocol server for Dryline. Exposes 8 bounded tools that fetc
 5. `get_big_users_nearby` — EPA ECHO regulated facilities
 6. `get_aquifer_status` — TWDB GWDB snapshot
 7. `get_active_permits` — TCEQ via ECHO + curated snapshot
-8. `get_river_flow` — USGS NWIS
+8. `get_river_flow` — USGS NWIS (discharge)
+9. `get_water_quality` — USGS NWIS in-situ sensors (specific conductance, nitrate, DO, pH, temp, turbidity)
 
 Tools 1–5 form the **minimum viable winning version**. Build them end-to-end first.
 

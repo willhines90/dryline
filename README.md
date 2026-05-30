@@ -1,14 +1,12 @@
 # Dryline
 
-**Investigate Texas water at any address.**
+**Follow the water at any Texas address — every claim cited.**
 
-*Environmental intelligence for a thirsty state.*
+Dryline turns any Texas address into a cited water-supply investigation — drought, reservoirs, aquifer trend, drinking-water compliance, industrial dischargers, stream flow, water-quality sensors, and active permits, each with inline sources and structured caveats — and drafts a civic-action artifact from what it finds: a public comment, a Groundwater Conservation District letter, or a Public Information Act request.
 
-Built for the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (May 9–10, 2026, Antler ATX). Submitting to:
-- **Brainforge / Vicinity Texas Open Data Track**
-- **Agents Track**
+**Built for the people who investigate and act on Texas water** — journalists, civic researchers, and advocacy organizations — and open to any resident asking what's happening to the water where they live.
 
-**Live demo:** [dryline.org](https://dryline.org/)
+**Live at [dryline.org](https://dryline.org/).** Born at the [AITX × Codex Hackathon](https://luma.com/aitx-codex-hackathon) (May 2026, Antler ATX); now a public tool.
 **Repo:** [github.com/willhines90/dryline](https://github.com/willhines90/dryline)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
@@ -17,7 +15,7 @@ Open source under the [MIT License](./LICENSE) — free to use, modify, and buil
 
 ---
 
-## The 90-second pitch
+## Why Dryline
 
 Texas added 2.6 million people in five years — more than any other state. Our water didn't keep up. The data is real, public, and federally published — but it's spread across a stack of state and federal agencies, each with a different update cadence, access pattern, and freshness profile. By the time a homeowner finds out their groundwater table dropped twelve feet last decade, or that a new fab three miles upstream just got a discharge permit, the comment window has closed.
 
@@ -63,7 +61,7 @@ Never used Dryline? Read this once and you're set.
 
 4. **Reset returns to the map.** Hit **Reset ↺** in the panel header to close the investigation and return to the full-bleed map. Pick another sample, click a different map feature, or type a fresh address — the panel reopens with the new run.
 
-5. **Want to see the agent really decide?** Append `?agent=1` to the URL. Investigations now hit a real Gemini function-calling loop where the model picks which tools to call. Slower (≈30 s vs the deterministic ≈18 s), more variable, but the agent's judgment is on stage. We've watched it skip `get_big_users_nearby` for personal-mode rural addresses and skip `get_drinking_water` when the story is groundwater. Drop the flag for rehearsed demo timing.
+5. **Want to see the agent really decide?** Append `?agent=1` to the URL. Investigations now hit a real Gemini function-calling loop where the model picks which tools to call. Slower (≈30 s vs the deterministic ≈18 s), more variable, but the agent's judgment is on stage. We've watched it skip `get_big_users_nearby` for personal-mode rural addresses and skip `get_drinking_water` when the story is groundwater. Drop the flag for predictable timing.
 
 ---
 
@@ -117,11 +115,11 @@ Texas water lives in the agency stack. Hover any underlined abbreviation in the 
 
 ## Screenshots
 
-The cinematic flow, in three frames. Capture pass happens during PHASE 5 visual verification.
+The cinematic investigation flow, in three frames.
 
 | | |
 |---|---|
-| **Map view** — All seven demo locations marked. Topographic basemap; reservoir-blue accents on arid earth. | ![map](docs/screenshots/01-map.png) |
+| **Map view** — All seven sample locations marked. Topographic basemap; reservoir-blue accents on arid earth. | ![map](docs/screenshots/01-map.png) |
 | **Investigation in flight** — Reasoning trace streaming, citation chips alive, synthesis card materializing. | ![investigation](docs/screenshots/02-investigation.png) |
 | **Public comment draft** — Action drawer open, drafted letter with cited NPDES IDs, *Review before sending* notice, copy-to-clipboard button. | ![public comment](docs/screenshots/03-public-comment.png) |
 
@@ -149,11 +147,11 @@ Subscores with no available data score 50 (neutral) and the rationale field reco
 
 ## Architecture choice — read this carefully
 
-Dryline ships its tools as **both a stdio MCP server** (`@dryline/mcp`) **and as in-process function tools for the web app**. The web demo uses a deterministic tool sequence by default for sub-25 s reliability; an `?agent=1` query flag enables real LLM-driven tool selection via Gemini function calling. The MCP server is the composable artifact — anyone can attach it to Claude Code, Codex, or Cursor. The agent's judgment shows up in synthesis emphasis, action-artifact selection, and citation discipline.
+Dryline ships its tools as **both a stdio MCP server** (`@dryline/mcp`) **and as in-process function tools for the web app**. The web app uses a deterministic tool sequence by default for sub-25 s reliability; an `?agent=1` query flag enables real LLM-driven tool selection via Gemini function calling. The MCP server is the composable artifact — anyone can attach it to Claude Code, Codex, or Cursor. The agent's judgment shows up in synthesis emphasis, action-artifact selection, and citation discipline.
 
-**Why deterministic by default for the web demo.** A managed agent loop adds model round-trips on top of `max(tool_latencies)`, which pushed dense-metro investigations to 50–70 s wall-clock under variable model load. The toolset is **nine tools** total: `resolve_location` runs first, then the other eight (`get_drought_status`, `get_reservoirs`, `get_drinking_water`, `get_big_users_nearby`, `get_aquifer_status`, `get_river_flow`, `get_active_permits`, `get_water_quality`) fan out in parallel. Pre-fetching that fan-out keeps the cinematic trace identical from the user's side (`tool_start` and `tool_result` SSE events still stream in real time as each tool resolves) while bringing every investigation under the 25 s budget. The synthesis-only Gemini call is where the model's judgment lands — the system prompt is the [skill brief](skill/SKILL.md), the user message includes the fixture's narrative framing, and the artifact selection (and refusal to invent docket numbers) is the agent's call.
+**Why deterministic by default for the web app.** A managed agent loop adds model round-trips on top of `max(tool_latencies)`, which pushed dense-metro investigations to 50–70 s wall-clock under variable model load. The toolset is **nine tools** total: `resolve_location` runs first, then the other eight (`get_drought_status`, `get_reservoirs`, `get_drinking_water`, `get_big_users_nearby`, `get_aquifer_status`, `get_river_flow`, `get_active_permits`, `get_water_quality`) fan out in parallel. Pre-fetching that fan-out keeps the cinematic trace identical from the user's side (`tool_start` and `tool_result` SSE events still stream in real time as each tool resolves) while bringing every investigation under the 25 s budget. The synthesis-only Gemini call is where the model's judgment lands — the system prompt is the [skill brief](skill/SKILL.md), the user message includes the fixture's narrative framing, and the artifact selection (and refusal to invent docket numbers) is the agent's call.
 
-**The `?agent=1` flag.** Hit `POST /api/investigate?agent=1` and the same SSE contract is served by a real Gemini function-calling loop: the model sees all nine tools, decides which to call (`resolve_location` is always first; the other eight are at the model's discretion), and emits the same `tool_start`/`tool_result`/`synthesis`/`artifact` events. Capped at 50 s wall-clock and 8 iterations. We've observed the model legitimately *skip* tools — Personal-mode Wimberley dropped `get_big_users_nearby`; Fort Stockton sometimes drops `get_drinking_water` to focus on groundwater — which is the right judgment call but produces variable trace shapes that the deterministic path avoids. The flag is the honesty knob: anyone who wants to see the LLM driving tool selection can pop it on; live demos that need rehearsed timing keep it off.
+**The `?agent=1` flag.** Hit `POST /api/investigate?agent=1` and the same SSE contract is served by a real Gemini function-calling loop: the model sees all nine tools, decides which to call (`resolve_location` is always first; the other eight are at the model's discretion), and emits the same `tool_start`/`tool_result`/`synthesis`/`artifact` events. Capped at 50 s wall-clock and 8 iterations. We've observed the model legitimately *skip* tools — Personal-mode Wimberley dropped `get_big_users_nearby`; Fort Stockton sometimes drops `get_drinking_water` to focus on groundwater — which is the right judgment call but produces variable trace shapes that the deterministic path avoids. The flag is the honesty knob: anyone who wants to see the LLM driving tool selection can pop it on; the default deterministic path keeps timing predictable for everyone else.
 
 The contract types (`mcp/src/types.ts` and the hand-mirrored `web/lib/types.ts`) are the wire boundary. The web app does not import from `@dryline/mcp` for type purposes other than to share the in-process registry; runtime decoupling stays clean so the MCP server can move to a different language without dragging the UI with it.
 
@@ -171,9 +169,9 @@ dryline/
 │   ├── app/              page.tsx + the api/investigate SSE route.
 │   ├── components/dryline/  Cinematic flow components.
 │   └── lib/              Wire-type mirror, Markdown renderer, utils.
-├── fixtures/             Canonical demo addresses.
+├── fixtures/             Canonical sample addresses.
 ├── LANDSCAPE.md          Competitive analysis: where Dryline sits, what's missing in market.
-└── EXTENSIONS.md         Post-hackathon roadmap.
+└── EXTENSIONS.md         Product roadmap.
 ```
 
 ---
@@ -243,7 +241,7 @@ pnpm dev:web
 # → http://localhost:3000
 ```
 
-Click any of the seven demo addresses → **Investigate**. The map flies to the address, the reasoning trace streams the tool calls, the Dryline Score and cited synthesis land in the right panel, and an inline *Open draft →* action card surfaces underneath with the drafted civic-action artifact.
+Click any of the seven sample addresses → **Investigate**. The map flies to the address, the reasoning trace streams the tool calls, the Dryline Score and cited synthesis land in the right panel, and an inline *Open draft →* action card surfaces underneath with the drafted civic-action artifact.
 
 ### Useful commands
 
@@ -259,7 +257,7 @@ pnpm --filter @dryline/mcp exec \
 ## Documents
 
 - [LANDSCAPE.md](./LANDSCAPE.md) — competitive analysis & gap framing
-- [EXTENSIONS.md](./EXTENSIONS.md) — post-hackathon roadmap
+- [EXTENSIONS.md](./EXTENSIONS.md) — product roadmap
 
 ---
 

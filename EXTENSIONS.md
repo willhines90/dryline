@@ -1,12 +1,12 @@
 # Dryline — Extensions Roadmap
 
-*Companion to `PROPOSAL.md`. Scope: what to build on top of the hackathon prototype. Each proposal is sized for post-hackathon, not Sunday-night.*
+*The product roadmap, now that Dryline is live. Scope: what to build on top of the shipped tool. `PROPOSAL.md` (local-only) holds the original thesis; `LANDSCAPE.md` the competitive analysis.*
 
 ---
 
 ## How to read this doc
 
-The hackathon scope locks Dryline as a **diagnostic** tool: address in → cited synthesis + drafted public comment out. This roadmap is about extending Dryline along three axes:
+Today Dryline is a **diagnostic** tool: address in → cited synthesis + drafted public comment out. This roadmap is about extending it along three axes:
 
 1. **Diagnostic → prescriptive.** Today Dryline tells you what's happening; tomorrow it tells you what to *do* about it (Resilience Plan, Rebate Finder).
 2. **Reactive → proactive.** Today users come to Dryline; tomorrow Dryline comes to users (Permit Watcher, Newsletter).

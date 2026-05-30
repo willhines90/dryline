@@ -10,9 +10,10 @@
  *
  * Both responses are cached in-process for the life of the server. The 122
  * major-reservoir list is larger than the 37 in the instantaneous feed; the
- * remaining ~85 are minor reservoirs without flood instrumentation. For the
- * hackathon scope (Hill Country / I-35 / coast), the 37 covers every demo
- * address; we surface a `bounds` caveat so the agent knows.
+ * remaining ~85 are minor reservoirs without flood instrumentation. The 37
+ * instrumented reservoirs cover the major population corridors (Hill Country
+ * / I-35 / coast); we surface a `bounds` caveat so the agent knows when a
+ * nearby reservoir isn't in the live feed.
  */
 import { source } from "./sources.js";
 import type { Source } from "../types.js";

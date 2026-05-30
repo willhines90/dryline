@@ -37,8 +37,8 @@ confidence. The web app surfaces both caveats and sources in the UI.
 |-------------|-----------------|
 | `mcp/`      | The MCP server — bounded tools returning `{ data, caveats, sources }`. DuckDB snapshot loader for groundwater wells, parcels, floodplain. |
 | `skill/`    | The agent skill (`skill/SKILL.md`) that teaches any agent how to use the MCP responsibly, with worked examples in `skill/references/`. |
-| `web/`      | Next.js + MapLibre + shadcn/ui investigation surface: visible reasoning trace, cinematic demo sequence, mode toggle, Actions panel. |
-| `fixtures/` | Canonical demo inputs. The live-demo trio must run cleanly. |
+| `web/`      | Next.js + MapLibre + shadcn/ui investigation surface: visible reasoning trace, cinematic investigation sequence (also first-run onboarding), mode toggle, Actions panel. |
+| `fixtures/` | Canonical sample inputs. The sample trio anchors onboarding and should run cleanly. |
 
 ## Getting set up
 

@@ -1,8 +1,8 @@
 /**
  * Dryline Score — single 0–100 number per investigation.
  *
- * Reductive on purpose: judges screenshot single numbers; they don't
- * screenshot paragraphs. Higher = more water stress.
+ * Reductive on purpose: a single number is what gets shared, cited, and
+ * remembered; nobody screenshots a paragraph. Higher = more water stress.
  *
  * Methodology: five subscores, equally weighted, averaged. Each subscore
  * is bounded 0–100. The total is the integer mean. Subscores that can't

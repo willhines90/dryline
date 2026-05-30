@@ -1,6 +1,8 @@
 # Dryline — agent brief
 
-You are working on **Dryline**, a Texas water environmental-intelligence tool built for the AITX × Codex Hackathon (May 9–10, 2026). This file is your project briefing. Read [`PROPOSAL.md`](./PROPOSAL.md) before any non-trivial change — it's the source of truth for scope, demo flow, and what to avoid.
+You are working on **Dryline**, a Texas water environmental-intelligence tool. It began at the AITX × Codex Hackathon (May 2026) and is now a **publicly launched product**, live at [dryline.org](https://dryline.org). This file is your project briefing and the source of truth for scope and focus. (`LANDSCAPE.md` carries the competitive analysis; `EXTENSIONS.md` is the roadmap. `PROPOSAL.md` holds deeper background but is local-only — don't assume a fresh clone has it.)
+
+The phase has shifted: the build-to-demo sprint is over. The work now is **usage, partnerships, and product-market fit** — read "Focus now" below before picking up scope.
 
 ## Where Dryline sits in the ecosystem
 
@@ -14,8 +16,8 @@ When making product decisions (new tools, new modes, scope changes, copy choices
 
 - `mcp/` — the MCP server: 9 bounded tools, all returning `{ data, caveats[], sources[] }`. DuckDB snapshot loader for groundwater wells, parcels, floodplain.
 - `skill/` — agent skill (`/skill/SKILL.md`) that teaches *any* agent how to use the MCP responsibly. Worked examples and reference docs in `skill/references/`.
-- `web/` — Next.js + MapLibre + shadcn/ui investigation surface: visible reasoning trace, cinematic demo sequence (address entry → map fly-to → trace streams → cards populate → tension flagged → synthesis → drafted artifact), mode toggle (Personal ↔ Transparency), Actions panel (drafted artifacts; hero is the public-comment draft).
-- `fixtures/` — canonical demo inputs. The live-demo trio (Wimberley → Taylor/Samsung → Fort Stockton/Comanche Springs) must run cleanly in three minutes; see `fixtures/demo-addresses.json` for the full seven.
+- `web/` — Next.js + MapLibre + shadcn/ui investigation surface: visible reasoning trace, cinematic investigation sequence (address entry → map fly-to → trace streams → cards populate → tension flagged → synthesis → drafted artifact) — this is also the first-run onboarding for new visitors — mode toggle (Personal ↔ Transparency), Actions panel (drafted artifacts; hero is the public-comment draft).
+- `fixtures/` — canonical sample inputs. The sample trio (Wimberley → Taylor/Samsung → Fort Stockton/Comanche Springs) anchors onboarding and the README walkthrough, and should still run cleanly; see `fixtures/demo-addresses.json` for the full seven.
 
 ## The non-negotiable contract
 
@@ -72,7 +74,7 @@ Tools 1–5 are the **minimum viable winning version** (see PROPOSAL.md fallback
 - **No user accounts.** Subscribe button stores email; no auth.
 - **No chat box.** The "Investigate" button + reasoning trace IS the interaction.
 - **Mode toggle exists** but Personal mode is v1; Transparency mode is the stretch.
-- **Surface caveats and sources in the UI.** No claim without a source. No "black box" answers. This is judged.
+- **Surface caveats and sources in the UI.** No claim without a source. No "black box" answers. This is the core trust contract — it's what makes the output usable in a story or a public comment.
 
 ## Skill discipline (`/skill/SKILL.md`)
 
@@ -93,14 +95,20 @@ Resist scope creep on examples — three is enough.
 - Action drafts include a "review before sending" notice.
 - The skill explicitly forbids the agent from causation language and personal-impact predictions.
 
-## What NOT to spend time on (from PROPOSAL.md)
+## Focus now — launched product, civic wedge
 
-- Don't perfect GIS layer styling — reservoir blue is enough.
-- Don't integrate every dataset — nine tools is the ceiling (`get_water_quality` was added post-MVP; resist a tenth).
-- Don't build a chat interface.
-- Don't build a settings page.
-- Don't gold-plate typography — default shadcn is fine.
-- Don't over-engineer deploy infra — Vercel + a single MCP host.
+The hackathon build is shipped and live. Priorities, in order:
+
+1. **Usage & product-market fit.** Make the public tool reliable and legible for real visitors who arrive without context. Instrument *events and aggregate patterns* (modes used, actions drafted, conversions) to learn what lands — but **never log individual searched addresses** (see Privacy).
+2. **The civic audience comes first.** The primary users are **journalists, civic researchers, and advocacy organizations** — people who investigate and act on Texas water professionally. Residents are the free public funnel and distribution surface; the water sector (GCDs, river authorities, utilities) is a later B2B/monetization path, not the opening move. When weighing a feature, ask: *does it help a reporter or advocate produce a cited, defensible artifact?* That's the wedge. A feature that only entertains a casual browser is lower priority.
+3. **Trust is the product.** The cited synthesis, the structured caveats, and the drafted action artifacts (public comment, GCD letter, PIA request) are the moat — they're what a generic civic dashboard can't copy. Protect them above polish.
+
+Guardrails that have **not** changed (resist scope creep here):
+
+- No chat interface — the Investigate button + reasoning trace *is* the interaction.
+- No settings page, no user accounts.
+- Nine tools is the ceiling (`get_water_quality` was the last; resist a tenth).
+- Don't gold-plate GIS styling or typography; don't over-engineer deploy infra (Vercel + a single MCP host is enough).
 
 ## Voice of the product
 

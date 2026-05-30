@@ -29,8 +29,8 @@ Please include:
 - We will keep you informed as we work on a fix, and credit you in the release
   notes once it ships — unless you prefer to remain anonymous.
 
-This is a hackathon-origin project maintained on a best-effort basis. We will
-move as quickly as we reasonably can.
+Dryline is an independently maintained project, handled on a best-effort
+basis. We will move as quickly as we reasonably can.
 
 ## Scope
 

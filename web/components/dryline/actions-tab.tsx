@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useInvestigation, useMultiInvestigation } from "./investigation-provider";
 import { PublicCommentDraft } from "./public-comment-draft";
+import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 /**
@@ -146,7 +147,10 @@ export function ActionCard() {
         <button
           type="button"
           disabled={!ready}
-          onClick={() => setActionsOpen(true)}
+          onClick={() => {
+            track("action_opened", { kind: artifact.kind });
+            setActionsOpen(true);
+          }}
           className={cn(
             "inline-flex items-center gap-1.5 px-3.5 py-2",
             "font-mono text-[10.5px] tracking-[0.18em] uppercase",

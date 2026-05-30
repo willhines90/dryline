@@ -68,7 +68,7 @@ export function HeaderHelp({ className }: { className?: string }) {
             <Row
               chip="Search"
               label="Search any Texas address"
-              body="Type a city, county, or pinned demo. Hit Enter on free text to run a fresh investigation against live public APIs."
+              body="Type a city, county, or a pinned sample. Hit Enter on free text to run a fresh investigation against live public APIs."
             />
             <Row
               chip="Personal"
@@ -88,12 +88,7 @@ export function HeaderHelp({ className }: { className?: string }) {
             <Row
               chip="○ Agentic"
               label="Agentic mode"
-              body="Lets an LLM choose which data tools to call for each address (slower, ≈30 s, but the agent's judgment is visible). Off = fast deterministic 7-tool fan-out."
-            />
-            <Row
-              chip="○ Live map"
-              label="Live map view"
-              body="Flips the basemap to a dark command-center cartography with glowing rivers and stream gauges. Same data, different lens."
+              body="Lets an LLM choose which data tools to call for each address (slower, ≈30 s, but the agent's judgment is visible). Off = fast deterministic 9-tool fan-out."
             />
             <Row
               chip="About"

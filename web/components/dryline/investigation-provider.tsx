@@ -175,6 +175,9 @@ function handleEvent(
     }
     case "synthesis": {
       const p = payload as { markdown?: string; sources?: unknown };
+      // A synthesis landing = a successful investigation (errors don't reach
+      // here). No params — just a completion count to pair against starts.
+      track("investigate_completed");
       setState((s) => ({
         ...s,
         synthesis: {
@@ -187,6 +190,10 @@ function handleEvent(
     case "artifact": {
       const p = payload as { kind?: string; title?: string; markdown?: string };
       if (!p.kind || !p.title || !p.markdown) return;
+      // Which civic-action artifact the investigation produced (public_comment
+      // / gcd_letter / pia_request / watering_reminder / well_outlook_briefing)
+      // — the kind only, no content. Core signal for the civic wedge.
+      track("action_drafted", { kind: p.kind });
       setState((s) => ({
         ...s,
         artifact: { kind: p.kind!, title: p.title!, markdown: p.markdown! },
@@ -247,19 +254,25 @@ function useSlotState(getAgentic: () => boolean): {
         score: null,
         error: null,
       });
+      // Privacy: never log the searched address (see SECURITY.md). Send only
+      // the coarse kind, the mode, and the region (county / band / "Free-text
+      // search") — enough to learn demand and which modes land, nothing that
+      // identifies where a user lives.
+      const investigateKind = location.id.startsWith("freetext:")
+        ? "freetext"
+        : location.id.startsWith("live:")
+        ? "live"
+        : location.id.startsWith("known:")
+        ? "known"
+        : location.id.startsWith("gauge:") ||
+          location.id.startsWith("reservoir:") ||
+          location.id.startsWith("basin:")
+        ? "map_pin"
+        : "sample";
       track("investigate_started", {
-        locationId: location.id,
-        locationLabel: location.label,
         mode: effectiveMode,
-        kind: location.id.startsWith("freetext:")
-          ? "freetext"
-          : location.id.startsWith("live:")
-          ? "live"
-          : location.id.startsWith("known:")
-          ? "known"
-          : location.id.startsWith("gauge:") || location.id.startsWith("reservoir:")
-          ? "map_pin"
-          : "sample",
+        kind: investigateKind,
+        region: location.region,
       });
 
       // Client-side watchdog. Vercel's serverless cap on the investigate

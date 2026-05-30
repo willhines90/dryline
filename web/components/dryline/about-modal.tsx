@@ -235,12 +235,13 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink mr-2">
                 Privacy
               </span>
-              Dryline uses Google Analytics 4 for anonymous traffic counts (page
-              views, basic events). No accounts, no personal data collected, no
-              third-party trackers beyond GA. Address strings you investigate are
-              sent to Nominatim (OpenStreetMap) and U.S. Census Geocoder for
-              resolution, and to Google&rsquo;s Gemini API for synthesis &mdash;
-              no other parties.
+              Dryline uses Google Analytics 4 for anonymous usage counts &mdash;
+              page views, and which features get used (mode, action type, county-level
+              region). <strong>The address you investigate is never sent to analytics
+              or stored.</strong> No accounts, no personal data collected, no
+              third-party trackers beyond GA. Address strings are sent only to
+              Nominatim (OpenStreetMap) and the U.S. Census Geocoder for resolution,
+              and to Google&rsquo;s Gemini API for synthesis &mdash; no other parties.
             </div>
             <div>
               <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink mr-2">
